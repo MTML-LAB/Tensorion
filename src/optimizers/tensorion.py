@@ -1,8 +1,8 @@
 import torch
 
-import ..tensor_utils
-import ..projectors
-import ..loggers
+import tensor_utils
+import projectors
+import loggers
 
 
 class Tensorion(torch.optim.Optimizer):
@@ -96,10 +96,12 @@ class Tensorion(torch.optim.Optimizer):
                     x0=g,
                     projector=projectors.project_spectral_sphere,
                     num_sets=g.dim(), 
-                )
+                )['projection']
 
                 # scale update
-                adjusted_lr = self.adjust_lr_for_muon(lr, p.shape)
+                param_shape = p.shape
+                param_shape = (min(param_shape), g.numel() // min(param_shape))
+                adjusted_lr = self.adjust_lr_for_muon(lr, param_shape)
 
                 # apply weight decay
                 p.data.mul_(1 - lr * wd)

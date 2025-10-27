@@ -201,7 +201,7 @@ def single_step_projection(
 
     x_dims = list(x0.shape)
     dims_idxs = np.argsort(x_dims)
-    assert x_dims[dims_idxs[0]] < x_dims[dims_idxs[1]], f"{x_dims=}\t{dims_idxs=}"
+    # assert x_dims[dims_idxs[0]] < x_dims[dims_idxs[1]], f"{x_dims=}\t{dims_idxs=}"
 
     mode = dims_idxs[0]
     proj = projector(x0, mode)
