@@ -9,11 +9,13 @@ class Tensorion(torch.optim.Optimizer):
     def __init__(
         self,
         params,
-        muon_params=None,
+        muon_params,
         lr=1e-3,
         wd=0.1,
         momentum=0.95,
         nesterov=False,
+        nuclear=False,
+        adjust_lr=True,
         adamw_params=None,
         adamw_betas=(0.9, 0.95),
         adamw_eps=1e-8,
@@ -24,6 +26,8 @@ class Tensorion(torch.optim.Optimizer):
             wd=wd,
             momentum=momentum,
             nesterov=nesterov,
+            nuclear=nuclear,
+            adjust_lr=adjust_lr,
             adamw_betas=adamw_betas,
             adamw_eps=adamw_eps,
         )
@@ -74,6 +78,8 @@ class Tensorion(torch.optim.Optimizer):
             lr = group["lr"]
             wd = group["wd"]
             momentum = group["momentum"]
+            nuclear = group["nuclear"]
+            adjust_lr = group["adjust_lr"]
 
             # generate weight updates
             for p in params:
@@ -98,10 +104,17 @@ class Tensorion(torch.optim.Optimizer):
                     num_sets=g.dim(), 
                 )['projection']
 
-                # scale update
-                param_shape = p.shape
-                param_shape = (min(param_shape), g.numel() // min(param_shape))
-                adjusted_lr = self.adjust_lr_for_muon(lr, param_shape)
+                if nuclear:
+                    nuclear = (g * u).sum()
+                    u.mul_(nuclear)
+
+                if adjust_lr:
+                    # scale update
+                    param_shape = p.shape
+                    param_shape = (min(param_shape), g.numel() // min(param_shape))
+                    adjusted_lr = self.adjust_lr_for_muon(lr, param_shape)
+                else:
+                    adjusted_lr = lr
 
                 # apply weight decay
                 p.data.mul_(1 - lr * wd)
