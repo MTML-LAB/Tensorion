@@ -7,7 +7,7 @@ from torch.utils.data import Dataset, DataLoader
 import numpy as np
 import random
 
-from omegaconf import OmegaConf
+from omegaconf import OmegaConf, DictConfig
 import re
 from typing import Union, Optional, Literal
 
@@ -99,3 +99,34 @@ def get_dataloader(
                         pin_memory=True)
 
     return train_loader, test_loader
+
+
+def load_from_config(cfg: DictConfig, random_gen: torch.Generator) -> tuple[Dataset, Dataset, DataLoader, DataLoader]:
+    """
+    :param cfg: Omegaconf config
+    :return: train dataset, test dataset, train dataloader, test dataloader
+    """
+
+    data_cfg = cfg.get('data_config', {})
+
+    datasets_kwargs = {
+        'dataset_name': data_cfg.dataset_name,
+    }
+
+    dataloaders_kwargs = {
+        'train_bs': data_cfg.train_bs,
+        'test_bs': data_cfg.test_bs,
+        'num_workers': data_cfg.get('num_workers', 0)
+    }
+
+    train_ds, test_ds = get_datasets(download=True, **datasets_kwargs)
+    
+    train_loader, test_loader = get_dataloader(
+        train_ds=train_ds, test_ds=test_ds,
+        persistent_workers=True,
+        ddp_sampler=False,
+        g=random_gen,
+        **dataloaders_kwargs
+    )
+
+    return train_ds, test_ds, train_loader, test_loader
