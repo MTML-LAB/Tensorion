@@ -12,9 +12,10 @@ import re
 from typing import Union, Optional, Literal
 
 
-def _load_CIFAR10(download: bool = True) -> tuple[Dataset, Dataset]:
+def _load_CIFAR10(download: bool = True, data_path: Optional[str] = None) -> tuple[Dataset, Dataset]:
     from torchvision.datasets import CIFAR10
 
+    data_path = './data' if data_path is None else data_path
     normalize_mean = (0.4914, 0.4822, 0.4465)
     normalize_std = (0.2023, 0.1994, 0.2010)
 
@@ -35,14 +36,14 @@ def _load_CIFAR10(download: bool = True) -> tuple[Dataset, Dataset]:
     ])
 
     train_data = CIFAR10(
-        root='./data',
+        root=data_path,
         train=True,
         download=download,
         transform=transform_train,
     )
 
     test_data = CIFAR10(
-        root='./data',
+        root=data_path,
         train=False,
         download=download,
         transform=transform_test,
@@ -51,8 +52,10 @@ def _load_CIFAR10(download: bool = True) -> tuple[Dataset, Dataset]:
     return train_data, test_data
 
 
-def _load_CIFAR100(download: bool = True) -> tuple[Dataset, Dataset]:
+def _load_CIFAR100(download: bool = True, data_path: Optional[str] = None) -> tuple[Dataset, Dataset]:
     from torchvision.datasets import CIFAR100
+
+    data_path = './data' if data_path is None else data_path
 
     # mean and std from 
     # https://github.com/weiaicunzai/pytorch-cifar100/blob/master/conf/global_settings.py
@@ -76,14 +79,14 @@ def _load_CIFAR100(download: bool = True) -> tuple[Dataset, Dataset]:
     ])
 
     train_data = CIFAR100(
-        root='./data',
+        root=data_path,
         train=True,
         download=download,
         transform=transform_train,
     )
 
     test_data = CIFAR100(
-        root='./data',
+        root=data_path,
         train=False,
         download=download,
         transform=transform_test,
@@ -92,13 +95,13 @@ def _load_CIFAR100(download: bool = True) -> tuple[Dataset, Dataset]:
     return train_data, test_data
 
 
-def get_datasets(dataset_name: Literal['CIFAR10', 'CIFAR100'], download: bool = True) -> tuple[Dataset, Dataset]:
+def get_datasets(dataset_name: Literal['CIFAR10', 'CIFAR100'], download: bool = True, data_path: Optional[str] = None) -> tuple[Dataset, Dataset]:
     dataset_loader = {
         'CIFAR10': _load_CIFAR10,
         'CIFAR100': _load_CIFAR100
     }
 
-    return dataset_loader[dataset_name](download)
+    return dataset_loader[dataset_name](download, data_path)
 
 
 def _set_worker_seed(worker_id):
@@ -151,6 +154,8 @@ def load_from_config(cfg: DictConfig, random_gen: torch.Generator) -> tuple[Data
 
     datasets_kwargs = {
         'dataset_name': data_cfg.dataset_name,
+        'download': data_cfg.get('download', True),
+        'data_path': data_cfg.get('path', None)
     }
 
     dataloaders_kwargs = {
