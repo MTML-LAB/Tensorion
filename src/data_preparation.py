@@ -95,10 +95,50 @@ def _load_CIFAR100(download: bool = True, data_path: Optional[str] = None) -> tu
     return train_data, test_data
 
 
+def _load_imaginet(download: bool = True, data_path: Optional[str] = None) -> tuple[Dataset, Dataset]:
+    from torchvision.datasets import ImageNet
+
+    data_path = './data' if data_path is None else data_path
+
+    normalize_mean = [0.485, 0.456, 0.406]
+    normalize_std = [0.229, 0.224, 0.225]
+
+    transform_train = transforms.Compose([
+        transforms.RandomResizedCrop(224),
+        transforms.RandomHorizontalFlip(),
+        transforms.ToTensor(),
+        transforms.Normalize(normalize_mean, normalize_std),
+    ])
+
+    transform_test = transforms.Compose([
+        transforms.Resize(256),
+        transforms.CenterCrop(224),
+        transforms.ToTensor(),
+        transforms.Normalize(normalize_mean, normalize_std),
+    ])
+
+    train_data = ImageNet(
+        root=data_path,
+        split="train",
+        download=download,
+        transform=transform_train,
+    )
+
+    test_data = ImageNet(
+        root=data_path,
+        split="val",
+        download=download,
+        transform=transform_test,
+    )
+
+    return train_data, test_data
+
+
 def get_datasets(dataset_name: Literal['CIFAR10', 'CIFAR100'], download: bool = True, data_path: Optional[str] = None) -> tuple[Dataset, Dataset]:
     dataset_loader = {
         'CIFAR10': _load_CIFAR10,
-        'CIFAR100': _load_CIFAR100
+        'CIFAR100': _load_CIFAR100,
+        'Imaginet': _load_imaginet,
     }
 
     return dataset_loader[dataset_name](download, data_path)
