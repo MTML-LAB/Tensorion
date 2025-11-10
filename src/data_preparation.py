@@ -164,7 +164,7 @@ def load_from_config(cfg: DictConfig, random_gen: torch.Generator) -> tuple[Data
         'num_workers': data_cfg.get('num_workers', 0)
     }
 
-    train_ds, test_ds = get_datasets(download=True, **datasets_kwargs)
+    train_ds, test_ds = get_datasets(**datasets_kwargs)
     
     train_loader, test_loader = get_dataloader(
         train_ds=train_ds, test_ds=test_ds,
