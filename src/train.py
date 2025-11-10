@@ -49,14 +49,15 @@ def train_epoch(
         optimizer: torch.optim.Optimizer, 
         scheduler, train_loader: DataLoader, 
         loss_fn: Callable[[torch.Tensor, torch.Tensor], torch.Tensor], 
-        device: str
+        device: str,
+        verbose_iters: int = -1,
     ) -> float:
     
     model.train()
     epoch_loss = torch.zeros((1, ), device=device)
     num_samples = 0
 
-    for (inp, labels) in train_loader:
+    for batch_idx, (inp, labels) in enumerate(train_loader):
         bs = labels.shape[0]
         inp = inp.to(device, non_blocking=True)
         labels = labels.to(device, non_blocking=True)
@@ -70,6 +71,12 @@ def train_epoch(
         
         epoch_loss = epoch_loss + loss.detach() * bs
         num_samples += bs
+
+        if (verbose_iters > 0) and ((batch_idx + 1) % verbose_iters == 0):
+            curr_loss = epoch_loss.item() // num_samples
+            num_batches = len(train_loader)
+
+            print(f"{batch_idx:4}/{num_batches:4}:\tloss{curr_loss:.5f}", flush=True)
 
     scheduler.step()
     epoch_loss = epoch_loss.item() / num_samples
@@ -87,7 +94,7 @@ def train_loop(model, train_loader, test_loader, optimizer, scheduler, criterion
                             test_loader=test_loader,
                             loss_fn=criterion,
                             device=device)
-    print(f'Epoch {0:2} ||  Accuracy = {acc:.4f} || test_loss = {test_loss:.6f}')
+    print(f'Epoch {0:2} ||  Accuracy = {acc:.4f} || test_loss = {test_loss:.6f}', flush=True)
 
     for epoch in range(1, num_epochs + 1):
         train_loss = train_epoch(model=model,
@@ -104,7 +111,7 @@ def train_loop(model, train_loader, test_loader, optimizer, scheduler, criterion
                             device=device)
                 
 
-        print(f'Epoch {epoch:2} ||  Accuracy = {acc:.4f} || test_loss = {test_loss:.6f} || train_loss = {train_loss:.6f}')
+        print(f'Epoch {epoch:2} ||  Accuracy = {acc:.4f} || test_loss = {test_loss:.6f} || train_loss = {train_loss:.6f}', flush=True)
         
         train_losses.append(train_loss)
         test_losses.append(test_loss)
