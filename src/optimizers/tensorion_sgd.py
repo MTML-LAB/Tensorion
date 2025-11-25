@@ -1,19 +1,21 @@
 import torch
 
-import ..tensor_utils
-import ..projectors
-import ..loggers
+import tensor_utils
+import projectors
+import loggers
 
 
 class TensorionSGD(torch.optim.Optimizer):
     def __init__(
         self,
         params,
-        muon_params=None,
+        muon_params,
         lr=1e-3,
         wd=0.1,
         momentum=0.95,
         nesterov=False,
+        nuclear=False,
+        adjust_lr=True,
         sgd_params=None,
         sgd_momentum=0.95,
     ):
@@ -24,9 +26,10 @@ class TensorionSGD(torch.optim.Optimizer):
             momentum=momentum,
             nesterov=nesterov,
             sgd_momentum=sgd_momentum,
+            nuclear=nuclear,
+            adjust_lr=adjust_lr,
         )
 
-        assert muon_params is not None, "Muon params mustn't be empy"
         muon_params = list(muon_params)
         sgd_params = list(sgd_params) if sgd_params is not None else []
         params = muon_params + sgd_params
@@ -74,6 +77,8 @@ class TensorionSGD(torch.optim.Optimizer):
             lr = group["lr"]
             wd = group["wd"]
             momentum = group["momentum"]
+            nuclear = group["nuclear"]
+            adjust_lr = group["adjust_lr"]
 
             # generate weight updates
             for p in params:
@@ -96,10 +101,19 @@ class TensorionSGD(torch.optim.Optimizer):
                     x0=g,
                     projector=projectors.project_spectral_sphere,
                     num_sets=g.dim(), 
-                )
+                )['projection']
 
-                # scale update
-                adjusted_lr = self.adjust_lr_for_muon(lr, p.shape)
+                if nuclear:
+                    nuclear = (g * u).sum()
+                    u.mul_(nuclear)
+
+                if adjust_lr:
+                    # scale update
+                    param_shape = p.shape
+                    param_shape = (min(param_shape), g.numel() // min(param_shape))
+                    adjusted_lr = self.adjust_lr_for_muon(lr, param_shape)
+                else:
+                    adjusted_lr = lr
 
                 # apply weight decay
                 p.data.mul_(1 - lr * wd)
