@@ -13,7 +13,7 @@ from omegaconf import OmegaConf, DictConfig
 import re
 from typing import Union, Optional, Literal, Callable, Any
 
-from models import resnet
+from models import resnet, vit
 from optimizers import tensorion
 
 import data_preparation
@@ -99,11 +99,13 @@ def get_scheduler_and_kwargs(scheduler_name: str, scheduler_kwargs: dict) -> tup
     return scheduler, kwargs
 
 
-def load_model(model_name: Literal['ResNet18', 'ResNet34'], num_classes: int, device) -> nn.Module:
+def load_model(model_name: Literal['ResNet18', 'ResNet34', 'VIT'], num_classes: int, device) -> nn.Module:
     if model_name == 'ResNet18':
         model = resnet.ResNet18(num_classes=num_classes)
     elif model_name == 'ResNet34':
         model = resnet.ResNet34(num_classes=num_classes)
+    elif model_name == 'VIT':
+        model = vit.VIT_0(num_classes=num_classes)
     model.to(device)
 
     return model
@@ -152,7 +154,8 @@ def save_data(cfg: DictConfig, train_results):
 
 def run(cfg_path: str):
     cfg: DictConfig = OmegaConf.load(cfg_path)
-
+    print('using next config:')
+    print(cfg)
     device = torch.device('cuda') if torch.cuda.is_available() else torch.device('cpu')
     print(f"{device=}")
     g = set_global_seed(cfg.get('seed', 42))

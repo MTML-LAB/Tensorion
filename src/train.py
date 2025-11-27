@@ -8,6 +8,7 @@ import random
 
 from omegaconf import OmegaConf
 import re
+from loggers import RandomGradLogger
 from typing import Union, Optional, Literal, Callable
 
 
@@ -51,11 +52,15 @@ def train_epoch(
         loss_fn: Callable[[torch.Tensor, torch.Tensor], torch.Tensor], 
         device: str,
         verbose_iters: int = -1,
+        epoch: int=0
     ) -> float:
     
     model.train()
     epoch_loss = torch.zeros((1, ), device=device)
     num_samples = 0
+    gs = 0
+
+    logger = RandomGradLogger(model, log_proba=1e-4)
 
     for batch_idx, (inp, labels) in enumerate(train_loader):
         bs = labels.shape[0]
@@ -67,10 +72,14 @@ def train_epoch(
         preds = model(inp)
         loss = loss_fn(preds, labels)
         loss.backward()
+
+        logger.sample_log(gs)
+
         optimizer.step()
         
         epoch_loss = epoch_loss + loss.detach() * bs
         num_samples += bs
+        gs += 1
 
         if (verbose_iters > 0) and ((batch_idx + 1) % verbose_iters == 0):
             curr_loss = epoch_loss.item() // num_samples
@@ -80,7 +89,7 @@ def train_epoch(
 
     scheduler.step()
     epoch_loss = epoch_loss.item() / num_samples
-
+    logger.save_logs(path=f'sample_data/gradients_from_{epoch}.pt')
     return epoch_loss
 
 
@@ -102,7 +111,8 @@ def train_loop(model, train_loader, test_loader, optimizer, scheduler, criterion
                                 train_loader=train_loader,
                                 loss_fn=criterion,
                                 device=device,
-                                scheduler=scheduler)
+                                scheduler=scheduler,
+                                epoch=epoch)
         lr = scheduler.get_last_lr()
 
         acc, test_loss = test(model=model,
