@@ -3,11 +3,16 @@ import torch
 from typing import Optional, Union, Callable, Any
 
 from tensor_utils import fold, unfold
-from loggers import MetricsCallback, MetricsCallbackFactory, projectors_metrics_collector_factory
+from loggers import (
+    MetricsCallback,
+    MetricsCallbackFactory,
+    projectors_metrics_collector_factory,
+)
 
 Tensor = torch.Tensor
 
 # base projectors
+
 
 def project_spectral_ball(x: Tensor, idx: int) -> Tensor:
     X = unfold(x, idx)
@@ -32,17 +37,17 @@ def project_spectral_sphere(x: Tensor, idx: int) -> Tensor:
 
 def project_ns(x: Tensor, idx: int, num_ns_iterations: int = 2):
     X = unfold(x, idx)
-    transpose = (X.shape[0] > X.shape[1])
+    transpose = X.shape[0] > X.shape[1]
     if transpose:
         X.transpose_(0, 1)
 
     # m x n, m <= n
-    X /= torch.linalg.norm(X, ord=2) # TODO: speedup
+    X /= torch.linalg.norm(X, ord=2)  # TODO: speedup
     m = X.shape[0]
     I = torch.eye(m)
-    
+
     for _ in range(num_ns_iterations):
-        X = (3*I - X @ X.T) @ (X / 2) # TODO: speedup
+        X = (3 * I - X @ X.T) @ (X / 2)  # TODO: speedup
 
     x_proj = fold(X, x.shape, idx)
     assert x_proj.shape == x.shape
@@ -79,13 +84,12 @@ def dykstra(
 
     if metrics_callback_factory is None:
         metrics_callback, history = projectors_metrics_collector_factory(
-            x0=x0, 
-            metrics=['sigvals_bounds', 'dot', 'residual']
+            x0=x0, metrics=["sigvals_bounds", "dot", "residual"]
         )
-        history['delta_cycle'] = []
+        history["delta_cycle"] = []
     else:
         metrics_callback, history = metrics_callback_factory(x0)
-        history['delta_cycle'] = []
+        history["delta_cycle"] = []
 
     global_step = 0
     for it in range(1, max_iter + 1):
@@ -103,20 +107,20 @@ def dykstra(
             global_step += 1
 
         delta = torch.linalg.norm(x - x_prev_cycle).item()
-        history['delta_cycle'].append(delta)
+        history["delta_cycle"].append(delta)
         if delta <= tol:
             return {
-                'projection': x,
-                'iterations': it,
-                'converged': True,
-                'history': history,
+                "projection": x,
+                "iterations": it,
+                "converged": True,
+                "history": history,
             }
 
     return {
-        'projection': x,
-        'iterations': max_iter,
-        'converged': False,
-        'history': history,
+        "projection": x,
+        "iterations": max_iter,
+        "converged": False,
+        "history": history,
     }
 
 
@@ -145,13 +149,12 @@ def alternating_projectors(
 
     if metrics_callback_factory is None:
         metrics_callback, history = projectors_metrics_collector_factory(
-            x0=x0, 
-            metrics=['sigvals_bounds', 'dot', 'residual']
+            x0=x0, metrics=["sigvals_bounds", "dot", "residual"]
         )
-        history['delta_cycle'] = []
+        history["delta_cycle"] = []
     else:
         metrics_callback, history = metrics_callback_factory(x0)
-        history['delta_cycle'] = []
+        history["delta_cycle"] = []
 
     global_step = 0
     for it in range(1, max_iter + 1):
@@ -163,20 +166,20 @@ def alternating_projectors(
             global_step += 1
 
         delta = torch.linalg.norm(x - x_prev_cycle).item()
-        history['delta_cycle'].append(delta)
+        history["delta_cycle"].append(delta)
         if delta <= tol:
             return {
-                'projection': x,
-                'iterations': it,
-                'converged': True,
-                'history': history,
+                "projection": x,
+                "iterations": it,
+                "converged": True,
+                "history": history,
             }
 
     return {
-        'projection': x,
-        'iterations': max_iter,
-        'converged': False,
-        'history': history,
+        "projection": x,
+        "iterations": max_iter,
+        "converged": False,
+        "history": history,
     }
 
 
@@ -207,8 +210,8 @@ def single_step_projection(
     proj = projector(x0, mode)
 
     return {
-        'projection': proj,
-        'iterations': 1,
-        'converged': True,
-        'history': dict(),
+        "projection": proj,
+        "iterations": 1,
+        "converged": True,
+        "history": dict(),
     }

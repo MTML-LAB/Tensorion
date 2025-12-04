@@ -10,30 +10,37 @@ import random
 from omegaconf import OmegaConf, DictConfig
 import re
 from typing import Union, Optional, Literal
+from check_datasets import load_from_disk
 
 
-def _load_CIFAR10(download: bool = True, data_path: Optional[str] = None) -> tuple[Dataset, Dataset]:
+def _load_CIFAR10(
+    download: bool = True, data_path: Optional[str] = None
+) -> tuple[Dataset, Dataset]:
     from torchvision.datasets import CIFAR10
 
-    data_path = './data' if data_path is None else data_path
+    data_path = "./data" if data_path is None else data_path
     normalize_mean = (0.4914, 0.4822, 0.4465)
     normalize_std = (0.2023, 0.1994, 0.2010)
 
-    transform_train = transforms.Compose([
-        # transforms.Resize(256),
-        # transforms.CenterCrop(224),
-        transforms.RandomCrop(32, padding=4),
-        transforms.RandomHorizontalFlip(),
-        transforms.ToTensor(),
-        transforms.Normalize(normalize_mean, normalize_std),
-    ])
+    transform_train = transforms.Compose(
+        [
+            transforms.Resize(256),
+            transforms.CenterCrop(224),
+            # transforms.RandomCrop(32, padding=4),
+            transforms.RandomHorizontalFlip(),
+            transforms.ToTensor(),
+            transforms.Normalize(normalize_mean, normalize_std),
+        ]
+    )
 
-    transform_test = transforms.Compose([
-        # transforms.Resize(256),
-        # transforms.CenterCrop(224),
-        transforms.ToTensor(),
-        transforms.Normalize(normalize_mean, normalize_std),
-    ])
+    transform_test = transforms.Compose(
+        [
+            transforms.Resize(256),
+            transforms.CenterCrop(224),
+            transforms.ToTensor(),
+            transforms.Normalize(normalize_mean, normalize_std),
+        ]
+    )
 
     train_data = CIFAR10(
         root=data_path,
@@ -52,42 +59,47 @@ def _load_CIFAR10(download: bool = True, data_path: Optional[str] = None) -> tup
     return train_data, test_data
 
 
-def _load_food101(download: bool = True, data_path: Optional[str] = None) -> tuple[Dataset, Dataset]:
+def _load_food101(
+    download: bool = True, data_path: Optional[str] = None
+) -> tuple[Dataset, Dataset]:
     from torchvision.datasets import Food101
 
-    data_path = './data' if data_path is None else data_path
+    data_path = "./data" if data_path is None else data_path
 
-    # mean and std from 
-    normalize_mean = [0.533, 0.442, 0.344]
-    normalize_std = [0.274, 0.264, 0.267]
+    # mean and std from
+    normalize_mean = (0.5493, 0.4451, 0.3435)
+    normalize_std = (0.2731, 0.2759, 0.2799)
 
-    transform_train = transforms.Compose([
-        transforms.Resize(256),
-        transforms.RandomCrop(224),
-        transforms.RandomHorizontalFlip(),
-        transforms.ToTensor(),
-        transforms.Normalize(normalize_mean, normalize_std),
+    transform_train = transforms.Compose(
+        [
+            transforms.Resize(256),
+            transforms.CenterCrop(224),
+            # transforms.RandomCrop(32, padding=4),
+            transforms.RandomHorizontalFlip(),
+            transforms.ToTensor(),
+            transforms.Normalize(normalize_mean, normalize_std),
+        ]
+    )
 
-    ])
-
-    transform_test = transforms.Compose([
-        transforms.Resize(256),
-        transforms.CenterCrop(224),
-        transforms.ToTensor(),
-        transforms.Normalize(normalize_mean, normalize_std),
-
-    ])
+    transform_test = transforms.Compose(
+        [
+            transforms.Resize(256),
+            transforms.CenterCrop(224),
+            transforms.ToTensor(),
+            transforms.Normalize(normalize_mean, normalize_std),
+        ]
+    )
 
     train_data = Food101(
         root=data_path,
-        split='train',
+        split="train",
         download=download,
         transform=transform_train,
     )
 
     test_data = Food101(
         root=data_path,
-        split='test',
+        split="test",
         download=download,
         transform=transform_test,
     )
@@ -95,31 +107,37 @@ def _load_food101(download: bool = True, data_path: Optional[str] = None) -> tup
     return train_data, test_data
 
 
-def _load_CIFAR100(download: bool = True, data_path: Optional[str] = None) -> tuple[Dataset, Dataset]:
+def _load_CIFAR100(
+    download: bool = True, data_path: Optional[str] = None
+) -> tuple[Dataset, Dataset]:
     from torchvision.datasets import CIFAR100
 
-    data_path = './data' if data_path is None else data_path
+    data_path = "./data" if data_path is None else data_path
 
-    # mean and std from 
+    # mean and std from
     # https://github.com/weiaicunzai/pytorch-cifar100/blob/master/conf/global_settings.py
     normalize_mean = (0.5070751592371323, 0.48654887331495095, 0.4409178433670343)
     normalize_std = (0.2673342858792401, 0.2564384629170883, 0.27615047132568404)
 
-    transform_train = transforms.Compose([
-        # transforms.Resize(256),
-        # transforms.CenterCrop(224),
-        transforms.RandomCrop(32, padding=4),
-        transforms.RandomHorizontalFlip(),
-        transforms.ToTensor(),
-        transforms.Normalize(normalize_mean, normalize_std),
-    ])
+    transform_train = transforms.Compose(
+        [
+            # transforms.Resize(256),
+            # transforms.CenterCrop(224),
+            transforms.RandomCrop(32, padding=4),
+            transforms.RandomHorizontalFlip(),
+            transforms.ToTensor(),
+            transforms.Normalize(normalize_mean, normalize_std),
+        ]
+    )
 
-    transform_test = transforms.Compose([
-        # transforms.Resize(256),
-        # transforms.CenterCrop(224),
-        transforms.ToTensor(),
-        transforms.Normalize(normalize_mean, normalize_std),
-    ])
+    transform_test = transforms.Compose(
+        [
+            # transforms.Resize(256),
+            # transforms.CenterCrop(224),
+            transforms.ToTensor(),
+            transforms.Normalize(normalize_mean, normalize_std),
+        ]
+    )
 
     train_data = CIFAR100(
         root=data_path,
@@ -138,51 +156,75 @@ def _load_CIFAR100(download: bool = True, data_path: Optional[str] = None) -> tu
     return train_data, test_data
 
 
-def _load_imaginet(download: bool = True, data_path: Optional[str] = None) -> tuple[Dataset, Dataset]:
-    from torchvision.datasets import ImageNet
+class check_shape(nn.Module):
+    def __init__(self):
+        super().__init__()
+        self.gs = transforms.Grayscale(num_output_channels=3)
 
-    data_path = './data' if data_path is None else data_path
+    def forward(self, img):
+        # print(f'before {img.shape}')
+        if img.shape[0] < 3:
+            img = torch.cat([img, img, img], dim=0)
+            # print(f'after {img.shape}')
+        return img
 
-    normalize_mean = [0.485, 0.456, 0.406]
-    normalize_std = [0.229, 0.224, 0.225]
 
-    transform_train = transforms.Compose([
-        transforms.RandomResizedCrop(224),
-        transforms.RandomHorizontalFlip(),
-        transforms.ToTensor(),
-        transforms.Normalize(normalize_mean, normalize_std),
-    ])
+class HF_imagenet(Dataset):
+    def __init__(self, dataset, transform):
+        self.ds = dataset
+        self.transform = transform
 
-    transform_test = transforms.Compose([
-        transforms.Resize(256),
-        transforms.CenterCrop(224),
-        transforms.ToTensor(),
-        transforms.Normalize(normalize_mean, normalize_std),
-    ])
+    def __len__(self):
+        return len(self.ds)
 
-    train_data = ImageNet(
-        root=data_path,
-        split="train",
-        download=download,
-        transform=transform_train,
+    def __getitem__(self, idx):
+        item = self.ds[idx]
+        img = self.transform(item["image"])
+
+        return img, item["label"]
+
+
+def _load_imaginet(download=True, data_path=None):
+    transform_train = transforms.Compose(
+        [
+            transforms.RandomResizedCrop(224),
+            transforms.RandomHorizontalFlip(),
+            transforms.Lambda(lambda img: img.convert("RGB")),
+            transforms.ToTensor(),
+            # check_shape(),
+            transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225]),
+        ]
     )
 
-    test_data = ImageNet(
-        root=data_path,
-        split="val",
-        download=download,
-        transform=transform_test,
+    transform_test = transforms.Compose(
+        [
+            transforms.Resize(256),
+            transforms.CenterCrop(224),
+            transforms.Lambda(lambda img: img.convert("RGB")),
+            transforms.ToTensor(),
+            # check_shape(),
+            transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225]),
+        ]
     )
 
-    return train_data, test_data
+    ds = load_from_disk("ILSVRC/imagenet-1k")
+
+    train_ds = HF_imagenet(ds["train"], transform=transform_train)
+    test_ds = HF_imagenet(ds["validation"], transform=transform_test)
+
+    return train_ds, test_ds
 
 
-def get_datasets(dataset_name: Literal['CIFAR10', 'CIFAR100'], download: bool = True, data_path: Optional[str] = None) -> tuple[Dataset, Dataset]:
+def get_datasets(
+    dataset_name: Literal["CIFAR10", "CIFAR100"],
+    download: bool = True,
+    data_path: Optional[str] = None,
+) -> tuple[Dataset, Dataset]:
     dataset_loader = {
-        'CIFAR10': _load_CIFAR10,
-        'CIFAR100': _load_CIFAR100,
-        'Imaginet': _load_imaginet,
-        'FOOD101': _load_food101
+        "CIFAR10": _load_CIFAR10,
+        "CIFAR100": _load_CIFAR100,
+        "Imaginet": _load_imaginet,
+        "FOOD101": _load_food101,
     }
 
     return dataset_loader[dataset_name](download, data_path)
@@ -195,63 +237,78 @@ def _set_worker_seed(worker_id):
 
 
 def get_dataloader(
-        train_ds: Dataset, test_ds: Dataset, 
-        train_bs: int, test_bs: int, 
-        num_workers: int = 0, persistent_workers: bool = False, 
-        ddp_sampler: bool = False, size: Optional[int] = None, rank: Optional[int] = None,
-        g: Optional[torch.Generator] = None, 
-        ):
-    
+    train_ds: Dataset,
+    test_ds: Dataset,
+    train_bs: int,
+    test_bs: int,
+    num_workers: int = 0,
+    persistent_workers: bool = False,
+    ddp_sampler: bool = False,
+    size: Optional[int] = None,
+    rank: Optional[int] = None,
+    g: Optional[torch.Generator] = None,
+):
     train_sampler, test_sampler = None, None
     if ddp_sampler:
         from torch.utils.data.distributed import DistributedSampler
 
-        train_sampler = DistributedSampler(train_ds, size, rank=rank, shuffle=True, drop_last=True)
-        test_sampler = DistributedSampler(test_ds, size, rank=rank, shuffle=False, drop_last=False)
+        train_sampler = DistributedSampler(
+            train_ds, size, rank=rank, shuffle=True, drop_last=True
+        )
+        test_sampler = DistributedSampler(
+            test_ds, size, rank=rank, shuffle=False, drop_last=False
+        )
 
-    train_loader = DataLoader(train_ds,
-                        sampler=train_sampler,
-                        batch_size=train_bs,
-                        num_workers=num_workers,
-                        persistent_workers=persistent_workers,
-                        worker_init_fn=_set_worker_seed,
-                        generator=g,
-                        pin_memory=True)
-    
-    test_loader = DataLoader(test_ds,
-                        sampler=test_sampler,
-                        batch_size=test_bs,
-                        num_workers=num_workers,  
-                        persistent_workers=persistent_workers,
-                        pin_memory=True)
+    train_loader = DataLoader(
+        train_ds,
+        sampler=train_sampler,
+        batch_size=train_bs,
+        num_workers=num_workers,
+        persistent_workers=persistent_workers,
+        worker_init_fn=_set_worker_seed,
+        generator=g,
+        pin_memory=True,
+    )
+
+    test_loader = DataLoader(
+        test_ds,
+        sampler=test_sampler,
+        batch_size=test_bs,
+        num_workers=num_workers,
+        persistent_workers=persistent_workers,
+        pin_memory=True,
+    )
 
     return train_loader, test_loader
 
 
-def load_from_config(cfg: DictConfig, random_gen: torch.Generator) -> tuple[Dataset, Dataset, DataLoader, DataLoader]:
+def load_from_config(
+    cfg: DictConfig, random_gen: torch.Generator
+) -> tuple[Dataset, Dataset, DataLoader, DataLoader]:
     """
     :param cfg: Omegaconf config
     :return: train dataset, test dataset, train dataloader, test dataloader
     """
 
-    data_cfg = cfg.get('data_config', {})
+    data_cfg = cfg.dataset
 
     datasets_kwargs = {
-        'dataset_name': data_cfg.dataset_name,
-        'download': data_cfg.get('download', True),
-        'data_path': data_cfg.get('path', None)
+        "dataset_name": data_cfg.dataset_name,
+        "download": data_cfg.download,
+        "data_path": data_cfg.data_path,
     }
 
     dataloaders_kwargs = {
-        'train_bs': data_cfg.train_bs,
-        'test_bs': data_cfg.test_bs,
-        'num_workers': data_cfg.get('num_workers', 0)
+        "train_bs": cfg.loader_params.train_bs,
+        "test_bs": cfg.loader_params.test_bs,
+        "num_workers": cfg.loader_params.num_workers,
     }
 
     train_ds, test_ds = get_datasets(**datasets_kwargs)
-    
+
     train_loader, test_loader = get_dataloader(
-        train_ds=train_ds, test_ds=test_ds,
+        train_ds=train_ds,
+        test_ds=test_ds,
         persistent_workers=True,
         ddp_sampler=False,
         g=random_gen,

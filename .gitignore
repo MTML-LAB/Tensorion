@@ -1,6 +1,10 @@
 data/
 results/
-*.yaml
+# *.yaml
 *.txt
 __pycache__/
 sample_data/
+outputs/
+config_adamw.yaml
+config_sgd.yaml
+config_tensorion.yaml

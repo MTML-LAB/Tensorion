@@ -20,7 +20,6 @@ class Tensorion(torch.optim.Optimizer):
         adamw_betas=(0.9, 0.95),
         adamw_eps=1e-8,
     ):
-
         defaults = dict(
             lr=lr,
             wd=wd,
@@ -35,7 +34,7 @@ class Tensorion(torch.optim.Optimizer):
         muon_params = list(muon_params)
         adamw_params = list(adamw_params) if adamw_params is not None else []
         params = muon_params + adamw_params
-        
+
         super().__init__(params, defaults)
         # Sort parameters into those for which we will use Muon, and those for which we will not
         for p in muon_params:
@@ -68,7 +67,6 @@ class Tensorion(torch.optim.Optimizer):
                 loss = closure()
 
         for group in self.param_groups:
-
             ############################
             #           Muon           #
             ############################
@@ -101,8 +99,8 @@ class Tensorion(torch.optim.Optimizer):
                 u = projectors.single_step_projection(
                     x0=g,
                     projector=projectors.project_spectral_sphere,
-                    num_sets=g.dim(), 
-                )['projection']
+                    num_sets=g.dim(),
+                )["projection"]
 
                 if nuclear:
                     nuclear = (g * u).sum()
@@ -127,7 +125,7 @@ class Tensorion(torch.optim.Optimizer):
             ############################
 
             params = [p for p in group["params"] if not self.state[p]["use_muon"]]
-            lr = group['lr']
+            lr = group["lr"]
             beta1, beta2 = group["adamw_betas"]
             eps = group["adamw_eps"]
             weight_decay = group["wd"]
