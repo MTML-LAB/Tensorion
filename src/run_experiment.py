@@ -15,6 +15,7 @@ from typing import Union, Optional, Literal, Callable, Any
 
 from models import resnet, vit
 from optimizers import tensorion
+from schedulers import WarmupCosineAnnealingWarmRestarts
 
 import data_preparation
 from train import train_loop
@@ -83,6 +84,7 @@ def get_optim_and_kwargs(model, optim_name: str, optimizer_kwargs: dict) -> tupl
 def get_scheduler_and_kwargs(scheduler_name: str, scheduler_kwargs: dict) -> tuple[type[LRScheduler], dict[str, Any]]:
     schedulers = {
         'CosineAnnealingWarmRestarts': torch.optim.lr_scheduler.CosineAnnealingWarmRestarts,
+        'WarmupCosineAnnealingWarmRestarts': WarmupCosineAnnealingWarmRestarts.WarmupCosineAnnealingWarmRestarts,
         'CosineAnnealingLR': torch.optim.lr_scheduler.CosineAnnealingLR,
         'ExponentialLR': torch.optim.lr_scheduler.ExponentialLR,
         'StepLR': torch.optim.lr_scheduler.StepLR,
