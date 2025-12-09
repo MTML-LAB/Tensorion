@@ -52,7 +52,8 @@ def train_epoch(
         loss_fn: Callable[[torch.Tensor, torch.Tensor], torch.Tensor], 
         device: str,
         verbose_iters: int = -1,
-        epoch: int=0
+        epoch: int=0,
+        scheduler_step: Literal['step', 'epoch'] = 'epoch',
     ) -> float:
     
     model.train()
@@ -76,6 +77,8 @@ def train_epoch(
         logger.sample_log(gs)
 
         optimizer.step()
+        if scheduler_step == 'step':
+            scheduler.step()
         
         epoch_loss = epoch_loss + loss.detach() * bs
         num_samples += bs
@@ -87,13 +90,14 @@ def train_epoch(
 
             print(f"{batch_idx:4}/{num_batches:4}:\tloss{curr_loss:.5f}", flush=True)
 
-    scheduler.step()
+    if scheduler_step == 'epoch':
+        scheduler.step()
     epoch_loss = epoch_loss.item() / num_samples
     logger.save_logs(path=f'sample_data/gradients_from_{epoch}.pt')
     return epoch_loss
 
 
-def train_loop(model, train_loader, test_loader, optimizer, scheduler, criterion, device, num_epochs):
+def train_loop(model, train_loader, test_loader, optimizer, scheduler, criterion, device, num_epochs, scheduler_step: Literal['step', 'epoch'] = 'epoch'):
     train_losses = []
     test_losses = []
     accs = []
@@ -112,7 +116,8 @@ def train_loop(model, train_loader, test_loader, optimizer, scheduler, criterion
                                 loss_fn=criterion,
                                 device=device,
                                 scheduler=scheduler,
-                                epoch=epoch)
+                                epoch=epoch,
+                                scheduler_step=scheduler_step)
         lr = scheduler.get_last_lr()
 
         acc, test_loss = test(model=model,

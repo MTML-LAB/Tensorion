@@ -166,6 +166,7 @@ def run(cfg_path: str):
     train_ds, test_ds, train_loader, test_loader = data_preparation.load_from_config(cfg, random_gen=g)
     optimizer = load_optim_from_config(cfg, model)
     scheduler = load_scheduler_from_config(cfg, optimizer)
+    scheduler_step = cfg.get('scheduler_step', 'epoch')
 
     criterion = torch.nn.CrossEntropyLoss()
 
@@ -178,7 +179,8 @@ def run(cfg_path: str):
         criterion=criterion,
         device=device,
         num_epochs=num_epochs,
-        scheduler=scheduler
+        scheduler=scheduler,
+        scheduler_step=scheduler_step,
     )
     
     save_data(cfg, train_results)
