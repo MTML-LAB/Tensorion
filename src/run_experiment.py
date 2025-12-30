@@ -168,6 +168,9 @@ def run(cfg_path: str):
     scheduler = load_scheduler_from_config(cfg, optimizer)
     scheduler_step = cfg.get('scheduler_step', 'epoch')
 
+    save_path = cfg.save_dir + '/checkpoints/'
+    save_steps = cfg.get('save_steps', -1)
+
     criterion = torch.nn.CrossEntropyLoss()
 
     num_epochs = cfg.num_epochs
@@ -181,6 +184,8 @@ def run(cfg_path: str):
         num_epochs=num_epochs,
         scheduler=scheduler,
         scheduler_step=scheduler_step,
+        save_steps=save_steps,
+        save_path=save_path
     )
     
     save_data(cfg, train_results)
