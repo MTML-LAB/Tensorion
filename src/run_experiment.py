@@ -15,11 +15,11 @@ from hydra.utils import instantiate
 import re
 from typing import Union, Optional, Literal, Callable, Any
 
-from models import resnet, vit
-from optimizers import tensorion
+# from src.models import resnet, vit
+# from src.optimizers import tensorion
 
-import data_preparation
-from train import train_loop
+import src.data_preparation as data_preparation
+from src.train import train_loop
 
 
 def set_global_seed(seed: int) -> torch.Generator:
@@ -64,7 +64,7 @@ def run(cfg):
         cfg, random_gen=g
     )
     optimizer = instantiate(cfg.optimizer, params=model.parameters())
-    scheduler = instantiate(cfg.scheduler, optimizer=optimizer)
+    scheduler = instantiate(cfg.scheduler, optimizer=optimizer, steps_per_epoch=len(train_loader))
 
     criterion = instantiate(cfg.criterion)
 

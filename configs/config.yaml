@@ -1,8 +1,8 @@
 defaults:
   - datasets@dataset: food101
-  - models@model: resnet18
+  - models@model: vit
   - optimizers@optimizer: adamw
-  - schedulers@scheduler: cosinelr
+  - schedulers@scheduler: onecyclelr
   - criterions@criterion: ce
   - _self_
 
@@ -10,8 +10,8 @@ seed: 42
 save_dir: "./results/exp1/${optimizer}_${dataset}"
 
 loader_params:
-  train_bs: 128
-  test_bs: 512
+  train_bs: 2048
+  test_bs: 2048
   num_workers: 4
 
 num_epochs: 150

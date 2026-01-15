@@ -8,7 +8,7 @@ import random
 
 from omegaconf import OmegaConf
 import re
-from loggers import RandomGradLogger
+from src.loggers import RandomGradLogger
 from typing import Union, Optional, Literal, Callable
 
 
@@ -110,8 +110,10 @@ def train_loop(
     acc, test_loss = test(
         model=model, test_loader=test_loader, loss_fn=criterion, device=device
     )
+    lr = scheduler.get_last_lr()
+
     print(
-        f"Epoch {0:2} ||  Accuracy = {acc:.4f} || test_loss = {test_loss:.6f}",
+        f"Epoch {0:2} ||  Accuracy = {acc:.4f} || test_loss = {test_loss:.6f} || lr = {lr}",
         flush=True,
     )
 
@@ -132,7 +134,7 @@ def train_loop(
         )
 
         print(
-            f"Epoch {epoch:2} ||  Accuracy = {acc:.4f} || test_loss = {test_loss:.6f} || train_loss = {train_loss:.6f}",
+            f"Epoch {epoch:2} ||  Accuracy = {acc:.4f} || test_loss = {test_loss:.6f} || train_loss = {train_loss:.6f} || lr = {lr}",
             flush=True,
         )
 

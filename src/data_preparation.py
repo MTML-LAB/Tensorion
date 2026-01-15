@@ -10,7 +10,8 @@ import random
 from omegaconf import OmegaConf, DictConfig
 import re
 from typing import Union, Optional, Literal
-from check_datasets import load_from_disk
+import datasets
+# from check_datasets import load_from_disk
 
 
 def _load_CIFAR10(
@@ -24,9 +25,9 @@ def _load_CIFAR10(
 
     transform_train = transforms.Compose(
         [
-            transforms.Resize(256),
-            transforms.CenterCrop(224),
-            # transforms.RandomCrop(32, padding=4),
+            # transforms.Resize(256),
+            # transforms.CenterCrop(224),
+            transforms.RandomCrop(32, padding=4),
             transforms.RandomHorizontalFlip(),
             transforms.ToTensor(),
             transforms.Normalize(normalize_mean, normalize_std),
@@ -35,8 +36,8 @@ def _load_CIFAR10(
 
     transform_test = transforms.Compose(
         [
-            transforms.Resize(256),
-            transforms.CenterCrop(224),
+            transforms.Resize(32),
+            # transforms.CenterCrop(224),
             transforms.ToTensor(),
             transforms.Normalize(normalize_mean, normalize_std),
         ]
@@ -316,3 +317,8 @@ def load_from_config(
     )
 
     return train_ds, test_ds, train_loader, test_loader
+
+def load_from_disk(ds_name):
+    path = f"/data/datasets/{ds_name.replace('/', '_')}"
+    dataset = datasets.load_from_disk(path)
+    print(dataset)

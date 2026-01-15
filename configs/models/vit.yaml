@@ -1,2 +1,2 @@
-_target_: models.vit.VIT_0
+_target_: src.models.vit.VIT_0
 num_classes: ${dataset.num_classes}
