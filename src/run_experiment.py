@@ -55,12 +55,13 @@ def get_optim_and_kwargs(model, optim_name: str, optimizer_kwargs: dict) -> tupl
         }
     elif optim_name == 'Tensorion':
         optimizer = tensorion.Tensorion
+        min_dim: int = optimizer_kwargs.get('min_dim', 3)
 
         muon_params = []
         adamw_params = []
 
         for name, param in model.named_parameters():
-            if param.ndim > 2:
+            if param.ndim >= min_dim:
                 muon_params.append(param)
             else:
                 adamw_params.append(param)
