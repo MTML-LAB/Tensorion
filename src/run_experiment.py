@@ -16,6 +16,8 @@ from typing import Union, Optional, Literal, Callable, Any
 from models import resnet, vit
 from optimizers import tensorion
 from schedulers import WarmupCosineAnnealingWarmRestarts
+from models import resnet
+from optimizers import tensorion, tensorion_sgd
 
 import data_preparation
 from train import train_loop
@@ -74,6 +76,26 @@ def get_optim_and_kwargs(model, optim_name: str, optimizer_kwargs: dict) -> tupl
             'wd': 5e-3,
             'adamw_betas': (0.9, 0.999),
             'adamw_eps': 1e-8
+        }
+    elif optim_name == 'TensorionSGD':
+        optimizer = tensorion_sgd.TensorionSGD
+
+        muon_params = []
+        sgd_params = []
+
+        for name, param in model.named_parameters():
+            if param.ndim > 2:
+                muon_params.append(param)
+            else:
+                sgd_params.append(param)
+
+        kwargs = {
+            'muon_params': muon_params,
+            'sgd_params': sgd_params,
+            'nesterov': False,
+            'momentum': 0.95,
+            'wd': 5e-3,
+            'sgd_momentum': 0.95,
         }
     else:
         raise ValueError("Incorrect optimizer name")
