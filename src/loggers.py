@@ -82,3 +82,34 @@ def projectors_metrics_collector_factory(x0: Tensor, metrics: Optional[list[str]
             collector(x, i, step, x0, history)
         
     return metrics_callback, history
+
+from torch import nn
+
+
+class RandomGradLogger:
+    def __init__(self, model: nn.Module, log_proba: float, seed: int = 42) -> None:
+        self.model = model
+        self.log_proba = log_proba
+
+        self.g = torch.Generator()
+        self.g.manual_seed(seed)
+
+        self.grad_logs: list[tuple[int, str, torch.Tensor]] = []
+
+    @torch.no_grad()
+    def sample_log(self, global_step: int = 0):
+        for name, param in self.model.named_parameters():
+            if (param.requires_grad == False) or (param.grad is None):
+                continue
+
+            if torch.rand(generator=self.g, size=(1,)) >= self.log_proba:
+                continue
+
+            grad = param.grad.detach().cpu()
+            self.grad_logs.append(
+                (global_step, name, grad)
+            )
+
+    @torch.no_grad()
+    def save_logs(self, path: str):
+            torch.save(self.grad_logs, path)

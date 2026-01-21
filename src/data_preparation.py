@@ -52,6 +52,49 @@ def _load_CIFAR10(download: bool = True, data_path: Optional[str] = None) -> tup
     return train_data, test_data
 
 
+def _load_food101(download: bool = True, data_path: Optional[str] = None) -> tuple[Dataset, Dataset]:
+    from torchvision.datasets import Food101
+
+    data_path = './data' if data_path is None else data_path
+
+    # mean and std from 
+    normalize_mean = [0.533, 0.442, 0.344]
+    normalize_std = [0.274, 0.264, 0.267]
+
+    transform_train = transforms.Compose([
+        transforms.Resize(256),
+        transforms.RandomCrop(224),
+        transforms.RandomHorizontalFlip(),
+        transforms.ToTensor(),
+        transforms.Normalize(normalize_mean, normalize_std),
+
+    ])
+
+    transform_test = transforms.Compose([
+        transforms.Resize(256),
+        transforms.CenterCrop(224),
+        transforms.ToTensor(),
+        transforms.Normalize(normalize_mean, normalize_std),
+
+    ])
+
+    train_data = Food101(
+        root=data_path,
+        split='train',
+        download=download,
+        transform=transform_train,
+    )
+
+    test_data = Food101(
+        root=data_path,
+        split='test',
+        download=download,
+        transform=transform_test,
+    )
+
+    return train_data, test_data
+
+
 def _load_CIFAR100(download: bool = True, data_path: Optional[str] = None) -> tuple[Dataset, Dataset]:
     from torchvision.datasets import CIFAR100
 
@@ -139,6 +182,7 @@ def get_datasets(dataset_name: Literal['CIFAR10', 'CIFAR100'], download: bool = 
         'CIFAR10': _load_CIFAR10,
         'CIFAR100': _load_CIFAR100,
         'Imaginet': _load_imaginet,
+        'FOOD101': _load_food101
     }
 
     return dataset_loader[dataset_name](download, data_path)

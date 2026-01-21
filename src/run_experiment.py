@@ -13,8 +13,9 @@ from omegaconf import OmegaConf, DictConfig
 import re
 from typing import Union, Optional, Literal, Callable, Any
 
-from models import resnet
+from models import resnet, vit
 from optimizers import tensorion, tensorion_sgd
+from schedulers import WarmupCosineAnnealingWarmRestarts
 
 import data_preparation
 from train import train_loop
@@ -54,12 +55,13 @@ def get_optim_and_kwargs(model, optim_name: str, optimizer_kwargs: dict) -> tupl
         }
     elif optim_name == 'Tensorion':
         optimizer = tensorion.Tensorion
+        min_dim: int = optimizer_kwargs.get('min_dim', 3)
 
         muon_params = []
         adamw_params = []
 
         for name, param in model.named_parameters():
-            if param.ndim > 2:
+            if param.ndim >= min_dim:
                 muon_params.append(param)
             else:
                 adamw_params.append(param)
@@ -103,6 +105,7 @@ def get_optim_and_kwargs(model, optim_name: str, optimizer_kwargs: dict) -> tupl
 def get_scheduler_and_kwargs(scheduler_name: str, scheduler_kwargs: dict) -> tuple[type[LRScheduler], dict[str, Any]]:
     schedulers = {
         'CosineAnnealingWarmRestarts': torch.optim.lr_scheduler.CosineAnnealingWarmRestarts,
+        'WarmupCosineAnnealingWarmRestarts': WarmupCosineAnnealingWarmRestarts.WarmupCosineAnnealingWarmRestarts,
         'CosineAnnealingLR': torch.optim.lr_scheduler.CosineAnnealingLR,
         'ExponentialLR': torch.optim.lr_scheduler.ExponentialLR,
         'StepLR': torch.optim.lr_scheduler.StepLR,
@@ -119,11 +122,13 @@ def get_scheduler_and_kwargs(scheduler_name: str, scheduler_kwargs: dict) -> tup
     return scheduler, kwargs
 
 
-def load_model(model_name: Literal['ResNet18', 'ResNet34'], num_classes: int, device) -> nn.Module:
+def load_model(model_name: Literal['ResNet18', 'ResNet34', 'VIT'], num_classes: int, device) -> nn.Module:
     if model_name == 'ResNet18':
         model = resnet.ResNet18(num_classes=num_classes)
     elif model_name == 'ResNet34':
         model = resnet.ResNet34(num_classes=num_classes)
+    elif model_name == 'VIT':
+        model = vit.VIT_0(num_classes=num_classes)
     model.to(device)
 
     return model
@@ -172,7 +177,8 @@ def save_data(cfg: DictConfig, train_results):
 
 def run(cfg_path: str):
     cfg: DictConfig = OmegaConf.load(cfg_path)
-
+    print('using next config:')
+    print(cfg)
     device = torch.device('cuda') if torch.cuda.is_available() else torch.device('cpu')
     print(f"{device=}")
     g = set_global_seed(cfg.get('seed', 42))
@@ -181,6 +187,10 @@ def run(cfg_path: str):
     train_ds, test_ds, train_loader, test_loader = data_preparation.load_from_config(cfg, random_gen=g)
     optimizer = load_optim_from_config(cfg, model)
     scheduler = load_scheduler_from_config(cfg, optimizer)
+    scheduler_step = cfg.get('scheduler_step', 'epoch')
+
+    save_path = cfg.save_dir + '/checkpoints/'
+    save_steps = cfg.get('save_steps', -1)
 
     criterion = torch.nn.CrossEntropyLoss()
 
@@ -193,7 +203,10 @@ def run(cfg_path: str):
         criterion=criterion,
         device=device,
         num_epochs=num_epochs,
-        scheduler=scheduler
+        scheduler=scheduler,
+        scheduler_step=scheduler_step,
+        save_steps=save_steps,
+        save_path=save_path
     )
     
     save_data(cfg, train_results)
