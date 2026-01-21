@@ -1,0 +1,25 @@
+defaults:
+  - dataset: cifar10
+  - dataloader: default
+  - models@model: resnet18
+  - optimizers@optimizer: adamw
+  - schedulers@scheduler: onecyclelr
+  - criterions@criterion: ce
+  - _self_
+
+seed: 42
+save_dir: "./results/exp1/${hydra:runtime.choices.optimizer}_${hydra:runtime.choices.dataset}"
+
+num_epochs: 150
+
+comet:
+  enabled: false
+  api_key: null
+  workspace: null
+  project_name: null
+  experiment_name: null
+  tags: null
+  offline: true
+  offline_directory: "${save_dir}/comet_offline"
+  log_code: false
+  code_dir: null

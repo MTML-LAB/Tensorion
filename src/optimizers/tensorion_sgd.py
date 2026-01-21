@@ -18,6 +18,7 @@ class TensorionSGD(torch.optim.Optimizer):
         adjust_lr=True,
         sgd_params=None,
         sgd_momentum=0.95,
+        min_dim: int = 3,
     ):
 
         defaults = dict(
@@ -37,8 +38,8 @@ class TensorionSGD(torch.optim.Optimizer):
         super().__init__(params, defaults)
         # Sort parameters into those for which we will use Muon, and those for which we will not
         for p in muon_params:
-            # Use Tensorion for every parameter in muon_params which is >= 3D and doesn't look like an embedding or head layer
-            assert p.ndim > 2, p.ndim
+            # Use Tensorion for every parameter in muon_params which is >= min_dim and doesn't look like an embedding or head layer
+            assert p.ndim >= min_dim, p.ndim
             self.state[p]["use_muon"] = True
 
         for p in sgd_params:

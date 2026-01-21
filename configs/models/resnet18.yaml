@@ -1,0 +1,2 @@
+_target_: src.models.resnet.ResNet18
+num_classes: ${dataset.num_classes}

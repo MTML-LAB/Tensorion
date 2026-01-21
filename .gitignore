@@ -1,6 +1,7 @@
 data/
 results/
-*.yaml
 *.txt
-__pycache__/
+**/__pycache__/
+results/
 sample_data/
+outputs/

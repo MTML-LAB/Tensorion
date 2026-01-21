@@ -21,7 +21,6 @@ class Tensorion(torch.optim.Optimizer):
         adamw_eps=1e-8,
         min_dim: int = 3,
     ):
-
         defaults = dict(
             lr=lr,
             wd=wd,
@@ -36,13 +35,14 @@ class Tensorion(torch.optim.Optimizer):
         muon_params = list(muon_params)
         adamw_params = list(adamw_params) if adamw_params is not None else []
         params = muon_params + adamw_params
-        
+
         super().__init__(params, defaults)
         # Sort parameters into those for which we will use Muon, and those for which we will not
         for p in muon_params:
-            # Use Tensorion for every parameter in muon_params which is >= 3D and doesn't look like an embedding or head layer
+            # Use Tensorion for every parameter in muon_params which is >= min_dim and doesn't look like an embedding or head layer
             assert p.ndim >= min_dim, p.ndim
             self.state[p]["use_muon"] = True
+            
         for p in adamw_params:
             # Do not use Muon for parameters in adamw_params
             self.state[p]["use_muon"] = False
@@ -70,7 +70,6 @@ class Tensorion(torch.optim.Optimizer):
                 loss = closure()
 
         for group in self.param_groups:
-
             ############################
             #           Muon           #
             ############################
@@ -103,8 +102,8 @@ class Tensorion(torch.optim.Optimizer):
                 u = projectors.single_step_projection(
                     x0=g,
                     projector=projectors.project_spectral_sphere,
-                    num_sets=g.dim(), 
-                )['projection']
+                    num_sets=g.dim(),
+                )["projection"]
 
                 if nuclear:
                     nuclear = (g * u).sum()
@@ -129,7 +128,7 @@ class Tensorion(torch.optim.Optimizer):
             ############################
 
             params = [p for p in group["params"] if not self.state[p]["use_muon"]]
-            lr = group['lr']
+            lr = group["lr"]
             beta1, beta2 = group["adamw_betas"]
             eps = group["adamw_eps"]
             weight_decay = group["wd"]
