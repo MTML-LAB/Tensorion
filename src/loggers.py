@@ -1,4 +1,5 @@
 import torch
+from torch import nn
 from typing import Optional, Callable, Any
 
 import src.tensor_utils as tensor_utils
@@ -91,9 +92,6 @@ def projectors_metrics_collector_factory(
             collector(x, i, step, x0, history)
 
     return metrics_callback, history
-
-
-from torch import nn
 
 
 class RandomGradLogger:
