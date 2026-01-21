@@ -14,10 +14,8 @@ import re
 from typing import Union, Optional, Literal, Callable, Any
 
 from models import resnet, vit
-from optimizers import tensorion
-from schedulers import WarmupCosineAnnealingWarmRestarts
-from models import resnet
 from optimizers import tensorion, tensorion_sgd
+from schedulers import WarmupCosineAnnealingWarmRestarts
 
 import data_preparation
 from train import train_loop
