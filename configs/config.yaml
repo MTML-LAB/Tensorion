@@ -1,7 +1,7 @@
 defaults:
-  - dataset: food101
+  - dataset: cifar10
   - dataloader: default
-  - models@model: vit
+  - models@model: resnet18
   - optimizers@optimizer: adamw
   - schedulers@scheduler: onecyclelr
   - criterions@criterion: ce

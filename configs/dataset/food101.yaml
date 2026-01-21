@@ -1,8 +1,7 @@
 defaults:
-  - /transforms: food101
+  - transforms: food101
 
 _target_: src.datasets.food101._load_food101
 num_classes: 101
 download: true
-data_path: "/data/users/aletovv/Tensorion/data"
-transforms: ${transforms}
+data_path: null

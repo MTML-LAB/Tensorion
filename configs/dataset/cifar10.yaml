@@ -1,8 +1,7 @@
 defaults:
-  - /transforms: cifar10
+  - transforms: cifar10
 
 _target_: src.datasets.cifar._load_CIFAR10
 num_classes: 10
 download: true
-data_path: "/data/users/aletovv/Tensorion/data"
-transforms: ${transforms}
+data_path: null
