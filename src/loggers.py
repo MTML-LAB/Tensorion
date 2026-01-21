@@ -110,7 +110,7 @@ class RandomGradLogger:
             if (param.requires_grad == False) or (param.grad is None):
                 continue
 
-            if torch.rand(generator=self.g, size=(1,)) >= self.log_proba:
+            if torch.rand((), generator=self.g).item() >= self.log_proba:
                 continue
 
             grad = param.grad.detach().cpu()

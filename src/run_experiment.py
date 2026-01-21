@@ -29,8 +29,9 @@ def set_global_seed(seed: int) -> torch.Generator:
     """
 
     torch.manual_seed(seed)
-    torch.cuda.manual_seed(seed)
-    torch.cuda.manual_seed_all(seed)
+    if torch.cuda.is_available():
+        torch.cuda.manual_seed(seed)
+        torch.cuda.manual_seed_all(seed)
     np.random.seed(seed)
     random.seed(seed)
     # torch.use_deterministic_algorithms(True)
@@ -131,8 +132,10 @@ def load_model(model_name: Literal['ResNet18', 'ResNet34', 'VIT'], num_classes: 
         model = resnet.ResNet34(num_classes=num_classes)
     elif model_name == 'VIT':
         model = vit.VIT_0(num_classes=num_classes)
+    else:
+        raise ValueError(f"Unknown model name: {model_name}")
+    
     model.to(device)
-
     return model
 
 
@@ -168,8 +171,7 @@ def save_data(cfg: DictConfig, train_results):
     train_losses, test_losses, accs, lrs = train_results
 
     dir_name = cfg.save_dir
-    if not os.path.exists(dir_name):
-        os.mkdir(dir_name)
+    os.makedirs(dir_name, exist_ok=True)
 
     np.save(f"{dir_name}/train_loss", train_losses)
     np.save(f"{dir_name}/test_loss", test_losses)
@@ -177,8 +179,7 @@ def save_data(cfg: DictConfig, train_results):
     np.save(f"{dir_name}/lr", lrs)
 
 
-@hydra.main(config_path="../configs", config_name="config.yaml", version_base="1.3")
-def run(cfg):
+def run(cfg: DictConfig):
     device = torch.device("cuda") if torch.cuda.is_available() else torch.device("cpu")
     print(f"{device=}")
     g = set_global_seed(cfg.seed)
@@ -188,8 +189,13 @@ def run(cfg):
         cfg, random_gen=g
     )
     optimizer = instantiate(cfg.optimizer, params=model.parameters())
-    scheduler = instantiate(cfg.scheduler, optimizer=optimizer, steps_per_epoch=len(train_loader))
-    scheduler_step = cfg.get('scheduler_step', 'epoch')
+
+    scheduler_kwargs = {"optimizer": optimizer}
+    if "steps_per_epoch" in cfg.scheduler:
+        scheduler_kwargs["steps_per_epoch"] = len(train_loader)
+    scheduler = instantiate(cfg.scheduler, **scheduler_kwargs)
+    
+    scheduler_step = cfg.scheduler.get('scheduler_step', 'epoch')
 
     save_path = cfg.save_dir + '/checkpoints/'
     save_steps = cfg.get('save_steps', -1)
@@ -212,7 +218,3 @@ def run(cfg):
     )
 
     save_data(cfg, train_results)
-
-
-if __name__ == "__main__":
-    run()

@@ -5,7 +5,7 @@ from torch.utils.data import Dataset, DataLoader
 
 from omegaconf import OmegaConf
 import re
-from src.loggers import RandomGradLogger
+from loggers import RandomGradLogger
 from typing import Union, Optional, Literal, Callable, Any
 import pathlib
 
@@ -117,7 +117,7 @@ def train_epoch(
         global_step += 1
 
         if (verbose_iters > 0) and ((batch_idx + 1) % verbose_iters == 0):
-            curr_loss = epoch_loss.item() // num_samples
+            curr_loss = epoch_loss.item() / num_samples
             num_batches = len(train_loader)
 
             print(f"{batch_idx:4}/{num_batches:4}:\tloss{curr_loss:.5f}", flush=True)

@@ -1,9 +1,10 @@
-from fastervit import create_model
 import torch
 import torch.nn as nn
 
 
 def VIT_0(num_classes: int=101):
+    from fastervit import create_model
+
     model = create_model('faster_vit_1_224')
     model.head = nn.Linear(640, num_classes)
     return model

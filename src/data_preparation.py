@@ -177,7 +177,6 @@ def get_dataloader(
     train_bs: int,
     test_bs: int,
     num_workers: int = 0,
-    persistent_workers: bool = False,
     ddp_sampler: bool = False,
     size: Optional[int] = None,
     rank: Optional[int] = None,
@@ -193,6 +192,8 @@ def get_dataloader(
         test_sampler = DistributedSampler(
             test_ds, size, rank=rank, shuffle=False, drop_last=False
         )
+
+    persistent_workers = num_workers > 0
 
     train_loader = DataLoader(
         train_ds,

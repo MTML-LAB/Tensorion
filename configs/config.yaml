@@ -7,7 +7,7 @@ defaults:
   - _self_
 
 seed: 42
-save_dir: "./results/exp1/${optimizer}_${dataset}"
+save_dir: "./results/exp1/${hydra:runtime.choices.optimizer}_${hydra:runtime.choices.dataset}"
 
 loader_params:
   train_bs: 2048

@@ -1,6 +1,6 @@
 _target_: torch.optim.lr_scheduler.OneCycleLR
-
-max_lr: 0.0001
-steps_per_epoch: ???
 optimizer: ???
+max_lr: 0.0001
 epochs: ${num_epochs}
+scheduler_step: step
+steps_per_epoch: ???
