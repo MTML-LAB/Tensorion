@@ -1,3 +1,5 @@
+from typing import Optional
+
 import torchvision.transforms as transforms
 from torch.utils.data import Dataset
 
@@ -16,8 +18,36 @@ class HF_imagenet(Dataset):
 
         return img, item["label"]
 
+    @staticmethod
+    def _load_imagenet_dataset(
+        download: bool,
+        data_path: Optional[str],
+        hf_name: str,
+    ):
+        try:
+            import datasets
+        except ImportError as exc:
+            raise RuntimeError("datasets is required for ImageNet loading") from exc
 
-def _load_imaginet(download=True, data_path=None):
+        if download:
+            kwargs = {}
+            if data_path:
+                kwargs["cache_dir"] = data_path
+            dataset = datasets.load_dataset(hf_name, **kwargs)
+        else:
+            if not data_path:
+                raise ValueError("data_path must be set when download is False")
+            dataset = datasets.load_from_disk(data_path)
+
+        print(dataset)
+        return dataset
+
+
+def _load_imagenet(
+    download: bool = True,
+    data_path: Optional[str] = None,
+    hf_name: Optional[str] = "imagenet-1k",
+):
     transform_train = transforms.Compose(
         [
             transforms.RandomResizedCrop(224),
@@ -40,21 +70,14 @@ def _load_imaginet(download=True, data_path=None):
         ]
     )
 
-    ds = load_from_disk("ILSVRC/imagenet-1k")
+    if hf_name is None:
+        raise ValueError("The hf_name is required for ImageNet loading")
+
+    ds = HF_imagenet._load_imagenet_dataset(
+        download=download, data_path=data_path, hf_name=hf_name
+    )
 
     train_ds = HF_imagenet(ds["train"], transform=transform_train)
     test_ds = HF_imagenet(ds["validation"], transform=transform_test)
 
     return train_ds, test_ds
-
-
-def load_from_disk(ds_name):
-    try:
-        import datasets
-    except ImportError as exc:
-        raise RuntimeError("datasets is required for ImageNet loading") from exc
-
-    path = f"/data/datasets/{ds_name.replace('/', '_')}"
-    dataset = datasets.load_from_disk(path)
-    print(dataset)
-    return dataset

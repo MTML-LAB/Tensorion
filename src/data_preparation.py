@@ -8,158 +8,31 @@ import numpy as np
 import random
 
 from omegaconf import OmegaConf, DictConfig
-import re
+import functools
 from typing import Union, Optional, Literal
 
-from src.datasets.hf_imagenet import _load_imaginet
-
-
-def _load_CIFAR10(
-    download: bool = True, data_path: Optional[str] = None
-) -> tuple[Dataset, Dataset]:
-    from torchvision.datasets import CIFAR10
-
-    data_path = "./data" if data_path is None else data_path
-    normalize_mean = (0.4914, 0.4822, 0.4465)
-    normalize_std = (0.2023, 0.1994, 0.2010)
-
-    transform_train = transforms.Compose(
-        [
-            # transforms.Resize(256),
-            # transforms.CenterCrop(224),
-            transforms.RandomCrop(32, padding=4),
-            transforms.RandomHorizontalFlip(),
-            transforms.ToTensor(),
-            transforms.Normalize(normalize_mean, normalize_std),
-        ]
-    )
-
-    transform_test = transforms.Compose(
-        [
-            transforms.Resize(32),
-            # transforms.CenterCrop(224),
-            transforms.ToTensor(),
-            transforms.Normalize(normalize_mean, normalize_std),
-        ]
-    )
-
-    train_data = CIFAR10(
-        root=data_path,
-        train=True,
-        download=download,
-        transform=transform_train,
-    )
-
-    test_data = CIFAR10(
-        root=data_path,
-        train=False,
-        download=download,
-        transform=transform_test,
-    )
-
-    return train_data, test_data
-
-
-def _load_CIFAR100(download: bool = True, data_path: Optional[str] = None) -> tuple[Dataset, Dataset]:
-    from torchvision.datasets import CIFAR100
-
-    data_path = './data' if data_path is None else data_path
-
-    # mean and std from
-    # https://github.com/weiaicunzai/pytorch-cifar100/blob/master/conf/global_settings.py
-    normalize_mean = (0.5070751592371323, 0.48654887331495095, 0.4409178433670343)
-    normalize_std = (0.2673342858792401, 0.2564384629170883, 0.27615047132568404)
-
-    transform_train = transforms.Compose(
-        [
-            # transforms.Resize(256),
-            # transforms.CenterCrop(224),
-            transforms.RandomCrop(32, padding=4),
-            transforms.RandomHorizontalFlip(),
-            transforms.ToTensor(),
-            transforms.Normalize(normalize_mean, normalize_std),
-        ]
-    )
-
-    transform_test = transforms.Compose(
-        [
-            # transforms.Resize(256),
-            # transforms.CenterCrop(224),
-            transforms.ToTensor(),
-            transforms.Normalize(normalize_mean, normalize_std),
-        ]
-    )
-
-    train_data = CIFAR100(
-        root=data_path,
-        train=True,
-        download=download,
-        transform=transform_train,
-    )
-
-    test_data = CIFAR100(
-        root=data_path,
-        train=False,
-        download=download,
-        transform=transform_test,
-    )
-
-    return train_data, test_data
-
-
-def _load_food101(download: bool = True, data_path: Optional[str] = None) -> tuple[Dataset, Dataset]:
-    from torchvision.datasets import Food101
-
-    data_path = './data' if data_path is None else data_path
-
-    # mean and std from 
-    normalize_mean = [0.533, 0.442, 0.344]
-    normalize_std = [0.274, 0.264, 0.267]
-
-    transform_train = transforms.Compose([
-        transforms.Resize(256),
-        transforms.RandomCrop(224),
-        transforms.RandomHorizontalFlip(),
-        transforms.ToTensor(),
-        transforms.Normalize(normalize_mean, normalize_std),
-
-    ])
-
-    transform_test = transforms.Compose([
-        transforms.Resize(256),
-        transforms.CenterCrop(224),
-        transforms.ToTensor(),
-        transforms.Normalize(normalize_mean, normalize_std),
-
-    ])
-
-    train_data = Food101(
-        root=data_path,
-        split='train',
-        download=download,
-        transform=transform_train,
-    )
-
-    test_data = Food101(
-        root=data_path,
-        split='test',
-        download=download,
-        transform=transform_test,
-    )
-
-    return train_data, test_data
+from src.datasets.hf_imagenet import _load_imagenet
+from src.datasets.cifar import _load_CIFAR10, _load_CIFAR100
+from src.datasets.food101 import _load_food101
 
 
 def get_datasets(
-    dataset_name: Literal["CIFAR10", "CIFAR100"],
+    dataset_name: Literal[
+        "CIFAR10",
+        "CIFAR100",
+        "ImageNet",
+        "FOOD101",
+    ],
     download: bool = True,
     data_path: Optional[str] = None,
+    hf_name: Optional[str] = None,
 ) -> tuple[Dataset, Dataset]:
+
     dataset_loader = {
         "CIFAR10": _load_CIFAR10,
         "CIFAR100": _load_CIFAR100,
-        "Imaginet": _load_imaginet,
         "FOOD101": _load_food101,
+        "ImageNet": functools.partial(_load_imagenet, hf_name=hf_name)
     }
 
     return dataset_loader[dataset_name](download, data_path)
@@ -233,6 +106,9 @@ def load_from_config(
         "download": data_cfg.download,
         "data_path": data_cfg.data_path,
     }
+    hf_name = data_cfg.get("hf_name")
+    if hf_name is not None:
+        datasets_kwargs["hf_name"] = hf_name
 
     dataloaders_kwargs = {
         "train_bs": cfg.loader_params.train_bs,
@@ -245,7 +121,6 @@ def load_from_config(
     train_loader, test_loader = get_dataloader(
         train_ds=train_ds,
         test_ds=test_ds,
-        persistent_workers=True,
         ddp_sampler=False,
         g=random_gen,
         **dataloaders_kwargs
