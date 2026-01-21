@@ -1,3 +1,4 @@
+import time
 import torch
 from torch import nn
 import torch.nn.functional as F
@@ -9,6 +10,7 @@ from loggers import RandomGradLogger
 from typing import Union, Optional, Literal, Callable, Any
 import pathlib
 
+from experiment_logger import ExperimentLogger
 
 @torch.no_grad()
 def save_checkpoint(
@@ -85,7 +87,10 @@ def train_epoch(
         epoch: int=0,
         scheduler_step: Literal['step', 'epoch'] = 'epoch',
         log_grads: bool = False,
-    ) -> float:
+    ) -> tuple[float, int, float]:
+    """
+    :return: epoch loss(float), num samples(int), elapsed time(float)
+    """
     
     model.train()
     epoch_loss = torch.zeros((1,), device=device)
@@ -94,6 +99,7 @@ def train_epoch(
 
     logger = RandomGradLogger(model, log_proba=1e-4) if log_grads else None
 
+    start_time = time.perf_counter()
     for batch_idx, (inp, labels) in enumerate(train_loader):
         bs = labels.shape[0]
         inp = inp.to(device, non_blocking=True)
@@ -130,7 +136,8 @@ def train_epoch(
         os.makedirs("sample_data", exist_ok=True)
         logger.save_logs(path=f"sample_data/gradients_from_{epoch}.pt")
     
-    return epoch_loss
+    elapsed = time.perf_counter() - start_time
+    return epoch_loss, num_samples, elapsed
 
 
 def train_loop(
@@ -143,13 +150,17 @@ def train_loop(
         num_epochs, 
         scheduler_step: Literal['step', 'epoch'] = 'epoch', 
         save_steps: int = -1, 
-        save_path: Optional[str] = None
+        save_path: Optional[str] = None,
+        experiment_logger: Optional[ExperimentLogger] = None
     ):
 
     train_losses = []
     test_losses = []
     accs = []
     lr_diffs = []
+    best_acc = float("-inf")
+    best_epoch = None
+    last_checkpoint_dir = None
 
     acc, test_loss = test(
         model=model, test_loader=test_loader, loss_fn=criterion, device=device
@@ -160,16 +171,29 @@ def train_loop(
         f"Epoch {0:2} ||  Accuracy = {acc:.4f} || test_loss = {test_loss:.6f} || lr = {lr}",
         flush=True,
     )
+    
+    if experiment_logger is not None:
+        experiment_logger.log_metrics(
+            {
+                "test/accuracy": acc,
+                "test/loss": test_loss,
+                **_format_lrs(lr),
+            },
+            step=0,
+            epoch=0,
+        )
 
     for epoch in range(1, num_epochs + 1):
-        train_loss = train_epoch(model=model,
-                                optimizer=optimizer,
-                                train_loader=train_loader,
-                                loss_fn=criterion,
-                                device=device,
-                                scheduler=scheduler,
-                                epoch=epoch,
-                                scheduler_step=scheduler_step)
+        train_loss, num_samples, elapsed = train_epoch(
+            model=model,
+            optimizer=optimizer,
+            train_loader=train_loader,
+            loss_fn=criterion,
+            device=device,
+            scheduler=scheduler,
+            epoch=epoch,
+            scheduler_step=scheduler_step,
+        )
         lr = scheduler.get_last_lr()
 
         acc, test_loss = test(
@@ -186,9 +210,43 @@ def train_loop(
         accs.append(acc)
         lr_diffs.append(lr)
 
+        if experiment_logger is not None:
+            metrics = {
+                "train/loss": train_loss,
+                "test/loss": test_loss,
+                "test/accuracy": acc,
+                **_format_lrs(lr),
+            }
+            if elapsed > 0:
+                metrics["train/samples_per_sec"] = num_samples / elapsed
+            experiment_logger.log_metrics(metrics, step=epoch, epoch=epoch)
+
+        if acc > best_acc:
+            best_acc = acc
+            best_epoch = epoch
+
         if (save_steps > 0) and (epoch % save_steps == 0):
             assert save_path is not None
 
             save_checkpoint(model, optimizer, scheduler, save_path, epoch)
+            last_checkpoint_dir = pathlib.Path(save_path) / f"epoch-{epoch}"
+
+    if experiment_logger is not None and save_steps > 0 and save_path is not None:
+        if last_checkpoint_dir is not None:
+            experiment_logger.log_asset_folder(
+                str(last_checkpoint_dir), name="checkpoint-last"
+            )
+        if best_epoch is not None:
+            best_dir = pathlib.Path(save_path) / f"epoch-{best_epoch}"
+            if best_dir.exists():
+                experiment_logger.log_asset_folder(
+                    str(best_dir), name="checkpoint-best"
+                )
 
     return (train_losses, test_losses, accs, lr_diffs)
+
+
+def _format_lrs(lrs: list[float]) -> dict[str, float]:
+    if len(lrs) == 1:
+        return {"lr": lrs[0]}
+    return {f"lr/group_{idx}": lr for idx, lr in enumerate(lrs)}
