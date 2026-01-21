@@ -1,5 +1,10 @@
 data/
 results/
+*.yaml
+*.txt
+__pycache__/
+sample_data/data/
+results/
 # *.yaml
 *.txt
 __pycache__/

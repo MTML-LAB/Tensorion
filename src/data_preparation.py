@@ -60,47 +60,42 @@ def _load_CIFAR10(
     return train_data, test_data
 
 
-def _load_food101(
-    download: bool = True, data_path: Optional[str] = None
-) -> tuple[Dataset, Dataset]:
+def _load_food101(download: bool = True, data_path: Optional[str] = None) -> tuple[Dataset, Dataset]:
     from torchvision.datasets import Food101
 
-    data_path = "./data" if data_path is None else data_path
+    data_path = './data' if data_path is None else data_path
 
-    # mean and std from
-    normalize_mean = (0.5493, 0.4451, 0.3435)
-    normalize_std = (0.2731, 0.2759, 0.2799)
+    # mean and std from 
+    normalize_mean = [0.533, 0.442, 0.344]
+    normalize_std = [0.274, 0.264, 0.267]
 
-    transform_train = transforms.Compose(
-        [
-            transforms.Resize(256),
-            transforms.CenterCrop(224),
-            # transforms.RandomCrop(32, padding=4),
-            transforms.RandomHorizontalFlip(),
-            transforms.ToTensor(),
-            transforms.Normalize(normalize_mean, normalize_std),
-        ]
-    )
+    transform_train = transforms.Compose([
+        transforms.Resize(256),
+        transforms.RandomCrop(224),
+        transforms.RandomHorizontalFlip(),
+        transforms.ToTensor(),
+        transforms.Normalize(normalize_mean, normalize_std),
 
-    transform_test = transforms.Compose(
-        [
-            transforms.Resize(256),
-            transforms.CenterCrop(224),
-            transforms.ToTensor(),
-            transforms.Normalize(normalize_mean, normalize_std),
-        ]
-    )
+    ])
+
+    transform_test = transforms.Compose([
+        transforms.Resize(256),
+        transforms.CenterCrop(224),
+        transforms.ToTensor(),
+        transforms.Normalize(normalize_mean, normalize_std),
+
+    ])
 
     train_data = Food101(
         root=data_path,
-        split="train",
+        split='train',
         download=download,
         transform=transform_train,
     )
 
     test_data = Food101(
         root=data_path,
-        split="test",
+        split='test',
         download=download,
         transform=transform_test,
     )
@@ -108,12 +103,10 @@ def _load_food101(
     return train_data, test_data
 
 
-def _load_CIFAR100(
-    download: bool = True, data_path: Optional[str] = None
-) -> tuple[Dataset, Dataset]:
+def _load_CIFAR100(download: bool = True, data_path: Optional[str] = None) -> tuple[Dataset, Dataset]:
     from torchvision.datasets import CIFAR100
 
-    data_path = "./data" if data_path is None else data_path
+    data_path = './data' if data_path is None else data_path
 
     # mean and std from
     # https://github.com/weiaicunzai/pytorch-cifar100/blob/master/conf/global_settings.py

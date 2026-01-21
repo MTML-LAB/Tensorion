@@ -19,6 +19,7 @@ class Tensorion(torch.optim.Optimizer):
         adamw_params=None,
         adamw_betas=(0.9, 0.95),
         adamw_eps=1e-8,
+        min_dim: int = 3,
     ):
         defaults = dict(
             lr=lr,
@@ -39,7 +40,7 @@ class Tensorion(torch.optim.Optimizer):
         # Sort parameters into those for which we will use Muon, and those for which we will not
         for p in muon_params:
             # Use Tensorion for every parameter in muon_params which is >= 3D and doesn't look like an embedding or head layer
-            assert p.ndim > 2, p.ndim
+            assert p.ndim >= min_dim, p.ndim
             self.state[p]["use_muon"] = True
         for p in adamw_params:
             # Do not use Muon for parameters in adamw_params
@@ -53,6 +54,7 @@ class Tensorion(torch.optim.Optimizer):
         adjusted_lr = lr * adjusted_ratio
         return adjusted_lr
 
+    @torch.no_grad()
     def step(self, closure=None):
         """
         Perform a single optimization step.
