@@ -4,7 +4,7 @@ import torch.nn.functional as F
 from torch.utils.data import Dataset, DataLoader
 
 from omegaconf import OmegaConf
-import re
+import os
 from loggers import RandomGradLogger
 from typing import Union, Optional, Literal, Callable, Any
 import pathlib
@@ -127,6 +127,7 @@ def train_epoch(
     epoch_loss = epoch_loss.item() / num_samples
 
     if logger is not None:
+        os.makedirs("sample_data", exist_ok=True)
         logger.save_logs(path=f"sample_data/gradients_from_{epoch}.pt")
     
     return epoch_loss
