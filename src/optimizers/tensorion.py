@@ -54,6 +54,7 @@ class Tensorion(torch.optim.Optimizer):
         adjusted_lr = lr * adjusted_ratio
         return adjusted_lr
 
+    @torch.no_grad()
     def step(self, closure=None):
         """
         Perform a single optimization step.
