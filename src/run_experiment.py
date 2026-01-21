@@ -197,9 +197,10 @@ def run(cfg: DictConfig):
     optimizer = instantiate(cfg.optimizer, params=model.parameters())
 
     scheduler_kwargs = {"optimizer": optimizer}
-    if "steps_per_epoch" in cfg.scheduler:
+    if "steps_per_epoch" in cfg.scheduler.scheduler_kwargs.keys():
         scheduler_kwargs["steps_per_epoch"] = len(train_loader)
-    scheduler = instantiate(cfg.scheduler, **scheduler_kwargs)
+
+    scheduler = instantiate(cfg.scheduler.scheduler_kwargs, **scheduler_kwargs)
     
     scheduler_step = cfg.scheduler.get('scheduler_step', 'epoch')
 

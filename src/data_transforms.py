@@ -8,7 +8,6 @@ class ConvertToRGB:
 
 
 def build_split_transform(transforms_cfg, split: str):
-    print(f"{transforms_cfg=}")
     if transforms_cfg is None or split not in transforms_cfg:
         raise ValueError(f"Missing transforms config for split '{split}'")
 

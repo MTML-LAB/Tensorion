@@ -1,4 +1,5 @@
-_target_: torch.optim.lr_scheduler.CosineAnnealingLR
-optimizer: ???
-T_max: 110
+scheduler_kwargs:
+  _target_: torch.optim.lr_scheduler.CosineAnnealingLR
+  optimizer: ???
+  T_max: 110
 scheduler_step: epoch
