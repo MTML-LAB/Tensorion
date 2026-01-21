@@ -9,7 +9,7 @@ import numpy as np
 import random
 import os
 
-from omegaconf import DictConfig
+from omegaconf import DictConfig, OmegaConf
 import hydra
 from hydra.utils import instantiate
 import re
@@ -21,6 +21,7 @@ from schedulers import WarmupCosineAnnealingWarmRestarts
 
 import data_preparation
 from train import train_loop
+from experiment_logger import build_experiment_logger
 
 
 def set_global_seed(seed: int) -> torch.Generator:
@@ -179,6 +180,13 @@ def save_data(cfg: DictConfig, train_results):
     np.save(f"{dir_name}/lr", lrs)
 
 
+def save_config_snapshot(cfg: DictConfig) -> str:
+    os.makedirs(cfg.save_dir, exist_ok=True)
+    config_path = os.path.join(cfg.save_dir, "config.yaml")
+    OmegaConf.save(cfg, config_path)
+    return config_path
+
+
 def run(cfg: DictConfig):
     device = torch.device("cuda") if torch.cuda.is_available() else torch.device("cpu")
     print(f"{device=}")
@@ -200,6 +208,10 @@ def run(cfg: DictConfig):
 
     criterion = instantiate(cfg.criterion)
 
+    experiment_logger = build_experiment_logger(cfg)
+    config_snapshot_path = save_config_snapshot(cfg)
+    experiment_logger.log_config(cfg, config_path=config_snapshot_path)
+
     num_epochs = cfg.num_epochs
     train_results = train_loop(
         model=model,
@@ -212,7 +224,13 @@ def run(cfg: DictConfig):
         scheduler=scheduler,
         scheduler_step=scheduler_step,
         save_steps=save_steps,
-        save_path=save_path
+        save_path=save_path,
+        experiment_logger=experiment_logger,
     )
 
     save_data(cfg, train_results)
+    for asset_name in ["train_loss.npy", "test_loss.npy", "accuracy.npy", "lr.npy"]:
+        asset_path = os.path.join(cfg.save_dir, asset_name)
+        if os.path.exists(asset_path):
+            experiment_logger.log_asset(asset_path)
+    experiment_logger.end()
