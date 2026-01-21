@@ -1,4 +1,0 @@
-dataset_name: FOOD101
-num_classes: 101
-download: true
-data_path: "/data/users/aletovv/Tensorion/data"

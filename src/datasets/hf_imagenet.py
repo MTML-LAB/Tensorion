@@ -1,7 +1,13 @@
 from typing import Optional
 
-import torchvision.transforms as transforms
 from torch.utils.data import Dataset
+
+from omegaconf import DictConfig
+
+from src.data_transforms import build_split_transform
+
+
+__all__ = ['_load_imagenet']
 
 
 class HF_imagenet(Dataset):
@@ -47,31 +53,14 @@ def _load_imagenet(
     download: bool = True,
     data_path: Optional[str] = None,
     hf_name: Optional[str] = "imagenet-1k",
+    transforms: Optional[DictConfig] = None,
+    **_unused,
 ):
-    transform_train = transforms.Compose(
-        [
-            transforms.RandomResizedCrop(224),
-            transforms.RandomHorizontalFlip(),
-            transforms.Lambda(lambda img: img.convert("RGB")),
-            transforms.ToTensor(),
-            # check_shape(),
-            transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225]),
-        ]
-    )
-
-    transform_test = transforms.Compose(
-        [
-            transforms.Resize(256),
-            transforms.CenterCrop(224),
-            transforms.Lambda(lambda img: img.convert("RGB")),
-            transforms.ToTensor(),
-            # check_shape(),
-            transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225]),
-        ]
-    )
-
     if hf_name is None:
         raise ValueError("The hf_name is required for ImageNet loading")
+
+    transform_train = build_split_transform(transforms, "train")
+    transform_test = build_split_transform(transforms, "test")
 
     ds = HF_imagenet._load_imagenet_dataset(
         download=download, data_path=data_path, hf_name=hf_name

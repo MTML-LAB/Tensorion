@@ -1,41 +1,12 @@
-import torch
-from torch import nn
-import torch.nn.functional as F
-import torchvision.transforms as transforms
-from torch.utils.data import Dataset, DataLoader
+import random
+from typing import Optional
 
 import numpy as np
-import random
+import torch
+from torch.utils.data import DataLoader, Dataset
 
-from omegaconf import OmegaConf, DictConfig
-import functools
-from typing import Union, Optional, Literal
-
-from src.datasets.hf_imagenet import _load_imagenet
-from src.datasets.cifar import _load_CIFAR10, _load_CIFAR100
-from src.datasets.food101 import _load_food101
-
-
-def get_datasets(
-    dataset_name: Literal[
-        "CIFAR10",
-        "CIFAR100",
-        "ImageNet",
-        "FOOD101",
-    ],
-    download: bool = True,
-    data_path: Optional[str] = None,
-    hf_name: Optional[str] = None,
-) -> tuple[Dataset, Dataset]:
-
-    dataset_loader = {
-        "CIFAR10": _load_CIFAR10,
-        "CIFAR100": _load_CIFAR100,
-        "FOOD101": _load_food101,
-        "ImageNet": functools.partial(_load_imagenet, hf_name=hf_name)
-    }
-
-    return dataset_loader[dataset_name](download, data_path)
+from hydra.utils import instantiate
+from omegaconf import DictConfig, OmegaConf
 
 
 def _set_worker_seed(worker_id):
@@ -44,86 +15,94 @@ def _set_worker_seed(worker_id):
     random.seed(worker_seed)
 
 
-def get_dataloader(
-    train_ds: Dataset,
-    test_ds: Dataset,
-    train_bs: int,
-    test_bs: int,
-    num_workers: int = 0,
-    ddp_sampler: bool = False,
-    size: Optional[int] = None,
-    rank: Optional[int] = None,
-    g: Optional[torch.Generator] = None,
-):
-    train_sampler, test_sampler = None, None
-    if ddp_sampler:
-        from torch.utils.data.distributed import DistributedSampler
+def _require_cfg(cfg: DictConfig, key: str, context: str):
+    if OmegaConf.is_missing(cfg, key):
+        raise ValueError(f"Missing required config key '{key}' in {context}")
+    
+    value = OmegaConf.select(cfg, key)
+    if value is None:
+        raise ValueError(f"Missing required config key '{key}' in {context}")
+    
+    return value
 
-        train_sampler = DistributedSampler(
-            train_ds, size, rank=rank, shuffle=True, drop_last=True
-        )
-        test_sampler = DistributedSampler(
-            test_ds, size, rank=rank, shuffle=False, drop_last=False
-        )
 
+def _build_generator(cfg: DictConfig) -> Optional[torch.Generator]:
+    seed = cfg.get("seed")
+    if seed is None:
+        return None
+
+    g = torch.Generator()
+    g.manual_seed(int(seed))
+    return g
+
+
+def get_datasets(cfg: DictConfig) -> dict[str, Dataset]:
+    dataset_cfg = _require_cfg(cfg, "dataset", "root config")
+    datasets = instantiate(dataset_cfg)
+
+    if isinstance(datasets, tuple):
+        if len(datasets) != 2:
+            raise ValueError("Dataset loader must return (train, test) or a dict of splits")
+        datasets = {"train": datasets[0], "test": datasets[1]}
+
+    if not isinstance(datasets, dict):
+        raise ValueError("Dataset loader must return a dict of split datasets")
+
+    for split, dataset in datasets.items():
+        if dataset is None or not isinstance(dataset, Dataset):
+            raise ValueError(f"Dataset split '{split}' is missing or invalid")
+
+    return datasets
+
+
+def get_dataloader(cfg: DictConfig, dataset: Dataset, split: str = "train") -> DataLoader:
+    if dataset is None:
+        raise ValueError(f"Dataset for split '{split}' is required")
+
+    dataloader_cfg = _require_cfg(cfg, "dataloader", "root config")
+    if split not in dataloader_cfg:
+        raise ValueError(f"Missing dataloader config for split '{split}'")
+
+    split_cfg = dataloader_cfg[split]
+    if "_target_" not in split_cfg:
+        raise ValueError(f"Dataloader config for split '{split}' must define _target_")
+
+    num_workers = split_cfg.get("num_workers", 0)
     persistent_workers = num_workers > 0
 
-    train_loader = DataLoader(
-        train_ds,
-        sampler=train_sampler,
-        batch_size=train_bs,
-        num_workers=num_workers,
-        persistent_workers=persistent_workers,
-        worker_init_fn=_set_worker_seed,
-        generator=g,
-        pin_memory=True,
-    )
+    sampler_cfg = split_cfg.get("sampler")
+    sampler = instantiate(sampler_cfg, dataset=dataset) if sampler_cfg else None
 
-    test_loader = DataLoader(
-        test_ds,
-        sampler=test_sampler,
-        batch_size=test_bs,
-        num_workers=num_workers,
-        persistent_workers=persistent_workers,
-        pin_memory=True,
-    )
-
-    return train_loader, test_loader
-
-
-def load_from_config(
-    cfg: DictConfig, random_gen: torch.Generator
-) -> tuple[Dataset, Dataset, DataLoader, DataLoader]:
-    """
-    :param cfg: Omegaconf config
-    :return: train dataset, test dataset, train dataloader, test dataloader
-    """
-
-    data_cfg = cfg.dataset
-
-    datasets_kwargs = {
-        "dataset_name": data_cfg.dataset_name,
-        "download": data_cfg.download,
-        "data_path": data_cfg.data_path,
+    extra_kwargs = {
+        "dataset": dataset,
+        "num_workers": num_workers,
+        "persistent_workers": persistent_workers,
+        "pin_memory": split_cfg.get("pin_memory", False)
     }
-    hf_name = data_cfg.get("hf_name")
-    if hf_name is not None:
-        datasets_kwargs["hf_name"] = hf_name
+    
+    if sampler is not None:
+        extra_kwargs["sampler"] = sampler
+        if "shuffle" in split_cfg:
+            extra_kwargs["shuffle"] = False
+    
+    if split == "train":
+        extra_kwargs.setdefault("worker_init_fn", _set_worker_seed)
+        generator = _build_generator(cfg)
+        if generator is not None:
+            extra_kwargs.setdefault("generator", generator)
 
-    dataloaders_kwargs = {
-        "train_bs": cfg.loader_params.train_bs,
-        "test_bs": cfg.loader_params.test_bs,
-        "num_workers": cfg.loader_params.num_workers,
-    }
+    return instantiate(split_cfg, **extra_kwargs)
 
-    train_ds, test_ds = get_datasets(**datasets_kwargs)
 
-    train_loader, test_loader = get_dataloader(
-        train_ds=train_ds,
-        test_ds=test_ds,
-        ddp_sampler=False,
-        g=random_gen,
-        **dataloaders_kwargs
-    )
+def load_from_config(cfg: DictConfig) -> tuple[Dataset, Dataset, DataLoader, DataLoader]:
+    datasets = get_datasets(cfg)
+    if "train" not in datasets or "test" not in datasets:
+        raise ValueError("Both train and test datasets are required")
+
+    train_ds = datasets["train"]
+    test_ds = datasets["test"]
+
+    train_loader = get_dataloader(cfg, train_ds, split="train")
+    test_loader = get_dataloader(cfg, test_ds, split="test")
 
     return train_ds, test_ds, train_loader, test_loader

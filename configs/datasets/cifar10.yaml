@@ -1,4 +1,0 @@
-dataset_name: CIFAR10
-num_classes: 10
-download: true
-data_path: "/data/users/aletovv/Tensorion/data"

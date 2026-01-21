@@ -182,12 +182,10 @@ def save_data(cfg: DictConfig, train_results):
 def run(cfg: DictConfig):
     device = torch.device("cuda") if torch.cuda.is_available() else torch.device("cpu")
     print(f"{device=}")
-    g = set_global_seed(cfg.seed)
+    set_global_seed(cfg.seed)
 
     model = instantiate(cfg.model).to(device)
-    train_ds, test_ds, train_loader, test_loader = data_preparation.load_from_config(
-        cfg, random_gen=g
-    )
+    train_ds, test_ds, train_loader, test_loader = data_preparation.load_from_config(cfg)
     optimizer = instantiate(cfg.optimizer, params=model.parameters())
 
     scheduler_kwargs = {"optimizer": optimizer}

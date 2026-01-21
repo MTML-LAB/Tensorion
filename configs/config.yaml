@@ -1,5 +1,6 @@
 defaults:
-  - datasets@dataset: food101
+  - dataset: food101
+  - dataloader: default
   - models@model: vit
   - optimizers@optimizer: adamw
   - schedulers@scheduler: onecyclelr
@@ -8,10 +9,5 @@ defaults:
 
 seed: 42
 save_dir: "./results/exp1/${hydra:runtime.choices.optimizer}_${hydra:runtime.choices.dataset}"
-
-loader_params:
-  train_bs: 2048
-  test_bs: 2048
-  num_workers: 4
 
 num_epochs: 150
