@@ -11,7 +11,6 @@ from omegaconf import OmegaConf, DictConfig
 import re
 from typing import Union, Optional, Literal
 import datasets
-# from check_datasets import load_from_disk
 
 
 def _load_CIFAR10(
@@ -60,49 +59,6 @@ def _load_CIFAR10(
     return train_data, test_data
 
 
-def _load_food101(download: bool = True, data_path: Optional[str] = None) -> tuple[Dataset, Dataset]:
-    from torchvision.datasets import Food101
-
-    data_path = './data' if data_path is None else data_path
-
-    # mean and std from 
-    normalize_mean = [0.533, 0.442, 0.344]
-    normalize_std = [0.274, 0.264, 0.267]
-
-    transform_train = transforms.Compose([
-        transforms.Resize(256),
-        transforms.RandomCrop(224),
-        transforms.RandomHorizontalFlip(),
-        transforms.ToTensor(),
-        transforms.Normalize(normalize_mean, normalize_std),
-
-    ])
-
-    transform_test = transforms.Compose([
-        transforms.Resize(256),
-        transforms.CenterCrop(224),
-        transforms.ToTensor(),
-        transforms.Normalize(normalize_mean, normalize_std),
-
-    ])
-
-    train_data = Food101(
-        root=data_path,
-        split='train',
-        download=download,
-        transform=transform_train,
-    )
-
-    test_data = Food101(
-        root=data_path,
-        split='test',
-        download=download,
-        transform=transform_test,
-    )
-
-    return train_data, test_data
-
-
 def _load_CIFAR100(download: bool = True, data_path: Optional[str] = None) -> tuple[Dataset, Dataset]:
     from torchvision.datasets import CIFAR100
 
@@ -143,6 +99,49 @@ def _load_CIFAR100(download: bool = True, data_path: Optional[str] = None) -> tu
     test_data = CIFAR100(
         root=data_path,
         train=False,
+        download=download,
+        transform=transform_test,
+    )
+
+    return train_data, test_data
+
+
+def _load_food101(download: bool = True, data_path: Optional[str] = None) -> tuple[Dataset, Dataset]:
+    from torchvision.datasets import Food101
+
+    data_path = './data' if data_path is None else data_path
+
+    # mean and std from 
+    normalize_mean = [0.533, 0.442, 0.344]
+    normalize_std = [0.274, 0.264, 0.267]
+
+    transform_train = transforms.Compose([
+        transforms.Resize(256),
+        transforms.RandomCrop(224),
+        transforms.RandomHorizontalFlip(),
+        transforms.ToTensor(),
+        transforms.Normalize(normalize_mean, normalize_std),
+
+    ])
+
+    transform_test = transforms.Compose([
+        transforms.Resize(256),
+        transforms.CenterCrop(224),
+        transforms.ToTensor(),
+        transforms.Normalize(normalize_mean, normalize_std),
+
+    ])
+
+    train_data = Food101(
+        root=data_path,
+        split='train',
+        download=download,
+        transform=transform_train,
+    )
+
+    test_data = Food101(
+        root=data_path,
+        split='test',
         download=download,
         transform=transform_test,
     )

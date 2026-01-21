@@ -3,9 +3,6 @@ from torch import nn
 import torch.nn.functional as F
 from torch.utils.data import Dataset, DataLoader
 
-import numpy as np
-import random
-
 from omegaconf import OmegaConf
 import re
 from src.loggers import RandomGradLogger
@@ -87,14 +84,15 @@ def train_epoch(
         verbose_iters: int = -1,
         epoch: int=0,
         scheduler_step: Literal['step', 'epoch'] = 'epoch',
+        log_grads: bool = False,
     ) -> float:
     
     model.train()
     epoch_loss = torch.zeros((1,), device=device)
     num_samples = 0
-    gs = 0
+    global_step = 0
 
-    logger = RandomGradLogger(model, log_proba=1e-4)
+    logger = RandomGradLogger(model, log_proba=1e-4) if log_grads else None
 
     for batch_idx, (inp, labels) in enumerate(train_loader):
         bs = labels.shape[0]
@@ -107,7 +105,8 @@ def train_epoch(
         loss = loss_fn(preds, labels)
         loss.backward()
 
-        logger.sample_log(gs)
+        if logger is not None:
+            logger.sample_log(global_step)
 
         optimizer.step()
         if scheduler_step == 'step':
@@ -115,8 +114,7 @@ def train_epoch(
         
         epoch_loss = epoch_loss + loss.detach() * bs
         num_samples += bs
-        gs += 1
-        gs += 1
+        global_step += 1
 
         if (verbose_iters > 0) and ((batch_idx + 1) % verbose_iters == 0):
             curr_loss = epoch_loss.item() // num_samples
@@ -127,11 +125,26 @@ def train_epoch(
     if scheduler_step == 'epoch':
         scheduler.step()
     epoch_loss = epoch_loss.item() / num_samples
-    logger.save_logs(path=f"sample_data/gradients_from_{epoch}.pt")
+
+    if logger is not None:
+        logger.save_logs(path=f"sample_data/gradients_from_{epoch}.pt")
+    
     return epoch_loss
 
 
-def train_loop(model, train_loader, test_loader, optimizer, scheduler, criterion, device, num_epochs, scheduler_step: Literal['step', 'epoch'] = 'epoch', save_steps: int = -1, save_path: Optional[str] = None):
+def train_loop(
+        model, 
+        train_loader, test_loader, 
+        optimizer, 
+        scheduler, 
+        criterion, 
+        device, 
+        num_epochs, 
+        scheduler_step: Literal['step', 'epoch'] = 'epoch', 
+        save_steps: int = -1, 
+        save_path: Optional[str] = None
+    ):
+
     train_losses = []
     test_losses = []
     accs = []

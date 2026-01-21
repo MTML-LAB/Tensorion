@@ -19,8 +19,8 @@ from models import resnet, vit
 from optimizers import tensorion, tensorion_sgd
 from schedulers import WarmupCosineAnnealingWarmRestarts
 
-import src.data_preparation as data_preparation
-from src.train import train_loop
+import data_preparation
+from train import train_loop
 
 
 def set_global_seed(seed: int) -> torch.Generator:

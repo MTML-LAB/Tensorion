@@ -39,9 +39,10 @@ class Tensorion(torch.optim.Optimizer):
         super().__init__(params, defaults)
         # Sort parameters into those for which we will use Muon, and those for which we will not
         for p in muon_params:
-            # Use Tensorion for every parameter in muon_params which is >= 3D and doesn't look like an embedding or head layer
+            # Use Tensorion for every parameter in muon_params which is >= min_dim and doesn't look like an embedding or head layer
             assert p.ndim >= min_dim, p.ndim
             self.state[p]["use_muon"] = True
+            
         for p in adamw_params:
             # Do not use Muon for parameters in adamw_params
             self.state[p]["use_muon"] = False
