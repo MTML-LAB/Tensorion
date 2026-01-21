@@ -49,8 +49,11 @@ def project_ns(x: Tensor, idx: int, num_ns_iterations: int = 2):
     for _ in range(num_ns_iterations):
         X = (3 * I - X @ X.T) @ (X / 2)  # TODO: speedup
 
+    if transpose:
+        X.transpose_(0, 1)
     x_proj = fold(X, x.shape, idx)
     assert x_proj.shape == x.shape
+    
     return x_proj
 
 
