@@ -2,8 +2,8 @@ import numpy as np
 import torch
 from typing import Optional, Union, Callable, Any
 
-from tensor_utils import fold, unfold
-from loggers import (
+from .tensor_utils import fold, unfold
+from .loggers import (
     MetricsCallback,
     MetricsCallbackFactory,
     projectors_metrics_collector_factory,
