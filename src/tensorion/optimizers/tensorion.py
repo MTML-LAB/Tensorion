@@ -1,8 +1,13 @@
 import torch
 
+from omegaconf import DictConfig
+
 from .. import tensor_utils
 from .. import projectors
 from .. import loggers
+
+
+__all__ = ['Tensorion', '_instantiate_tensorion']
 
 
 class Tensorion(torch.optim.Optimizer):
@@ -158,3 +163,26 @@ class Tensorion(torch.optim.Optimizer):
                 p.data.add_(g, alpha=-lr / scale)
 
         return loss
+
+def _instantiate_tensorion(params, **kwargs) -> Tensorion:
+    muon_params = []
+    adamw_params = []
+
+    min_dim = kwargs.get('min_dim', 3)
+
+    for param in params:
+        if param.ndim >= min_dim:
+            muon_params.append(param)
+        else:
+            adamw_params.append(param)
+
+    opt = Tensorion(
+        params,
+        muon_params=muon_params,
+        adamw_params=adamw_params,
+        **kwargs
+    )
+
+    print(f"{opt=}")
+
+    return opt
