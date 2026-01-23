@@ -1,8 +1,8 @@
 import torch
 
-import tensor_utils
-import projectors
-import loggers
+from .. import tensor_utils
+from .. import projectors
+from .. import loggers
 
 
 class Tensorion(torch.optim.Optimizer):

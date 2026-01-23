@@ -4,7 +4,7 @@ train:
     - _target_: torchvision.transforms.RandomResizedCrop
       size: 224
     - _target_: torchvision.transforms.RandomHorizontalFlip
-    - _target_: src.data_transforms.ConvertToRGB
+    - _target_: tensorion.data_transforms.ConvertToRGB
     - _target_: torchvision.transforms.ToTensor
     - _target_: torchvision.transforms.Normalize
       mean: [0.485, 0.456, 0.406]
@@ -16,7 +16,7 @@ test:
       size: 256
     - _target_: torchvision.transforms.CenterCrop
       size: 224
-    - _target_: src.data_transforms.ConvertToRGB
+    - _target_: tensorion.data_transforms.ConvertToRGB
     - _target_: torchvision.transforms.ToTensor
     - _target_: torchvision.transforms.Normalize
       mean: [0.485, 0.456, 0.406]

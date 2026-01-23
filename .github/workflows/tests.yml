@@ -1,0 +1,43 @@
+name: Tests
+
+on:
+  pull_request:
+  push:
+    branches:
+      - master
+
+jobs:
+  tests:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Install Poetry
+        uses: snok/install-poetry@v1
+
+      - name: Setup Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.11"
+          cache: poetry
+          cache-dependency-path: poetry.lock
+
+      - name: Select Python for Poetry venv
+        run: |
+          poetry env use python
+
+      - name: Install deps
+        run: |
+          poetry install --no-interaction --with dev
+
+      - name: Run tests with coverage
+        run: |
+          poetry run pytest --cov=tensorion --cov-report=term-missing --cov-report=xml -m "not integration"
+      
+      - name: Upload coverage.xml artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-xml
+          path: coverage.xml
+          if-no-files-found: error

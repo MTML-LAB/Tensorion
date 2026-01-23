@@ -4,7 +4,7 @@ from torch.utils.data import Dataset
 
 from omegaconf import DictConfig
 
-from src.data_transforms import build_split_transform
+from ..data_transforms import build_split_transform
 
 
 __all__ = ['_load_food101']
