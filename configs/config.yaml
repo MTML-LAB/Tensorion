@@ -1,5 +1,5 @@
 defaults:
-  - dataset: barcoded_mnist
+  - dataset: barcoded_mnist_bal
   - dataloader: default
   - model: resnet18
   - optimizer: adamw

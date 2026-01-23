@@ -2,7 +2,7 @@ defaults:
   - transforms: barcoded_mnist
 
 _target_: tensorion.datasets.barcoded_mnist._load_barcoded_mnist
-num_classes: 10240
-download: true
-data_path: 
-with_mnist: false
+num_classes: 10250
+download: false
+data_path: ./data
+with_mnist: true
