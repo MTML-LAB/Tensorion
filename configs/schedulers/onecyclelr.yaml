@@ -1,7 +1,7 @@
 scheduler_kwargs:
   _target_: torch.optim.lr_scheduler.OneCycleLR
   optimizer: ???
-  max_lr: 0.0001
+  max_lr: ${optimizer.lr}
   epochs: ${num_epochs}
   steps_per_epoch: ???
 scheduler_step: step
