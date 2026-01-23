@@ -11,10 +11,12 @@ from tensorion import run_experiment
 pytestmark = pytest.mark.integration
 
 
+@pytest.mark.integration
 def _cifar10_available(data_dir: Path) -> bool:
     return (data_dir / "cifar-10-batches-py").exists()
 
 
+@pytest.mark.integration
 def test_resnet18_cifar10_training_short(tmp_path, monkeypatch):
     data_dir = Path(
         os.getenv(

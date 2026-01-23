@@ -33,7 +33,7 @@ jobs:
 
       - name: Run tests with coverage
         run: |
-          poetry run pytest --cov=tensorion --cov-report=term-missing --cov-report=xml ./tests/unit
+          poetry run pytest --cov=tensorion --cov-report=term-missing --cov-report=xml -m "not integration"
       
       - name: Upload coverage.xml artifact
         uses: actions/upload-artifact@v4
