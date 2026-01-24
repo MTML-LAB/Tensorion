@@ -17,7 +17,7 @@ from typing import Union, Optional, Literal, Callable, Any
 
 from .models import resnet, vit
 from .optimizers import tensorion, tensorion_sgd
-from .schedulers import WarmupCosineAnnealingWarmRestarts
+from .schedulers import WarmupCosineAnnealingWarmRestarts, no_scheduler
 
 from . import data_preparation
 from .train import train_loop
@@ -110,6 +110,7 @@ def get_scheduler_and_kwargs(scheduler_name: str, scheduler_kwargs: dict) -> tup
     schedulers = {
         'CosineAnnealingWarmRestarts': torch.optim.lr_scheduler.CosineAnnealingWarmRestarts,
         'WarmupCosineAnnealingWarmRestarts': WarmupCosineAnnealingWarmRestarts.WarmupCosineAnnealingWarmRestarts,
+        'NoOpScheduler': no_scheduler.NoOpScheduler,
         'CosineAnnealingLR': torch.optim.lr_scheduler.CosineAnnealingLR,
         'ExponentialLR': torch.optim.lr_scheduler.ExponentialLR,
         'StepLR': torch.optim.lr_scheduler.StepLR,
@@ -194,7 +195,15 @@ def run(cfg: DictConfig):
 
     model = instantiate(cfg.model).to(device)
     train_ds, test_ds, train_loader, test_loader = data_preparation.load_from_config(cfg)
-    optimizer = instantiate(cfg.optimizer, params=model.parameters())
+    optimizer_target = cfg.optimizer.get("_target_", "")
+    if optimizer_target == "tensorion.optimizers.combined_optimizer.CombinedOptimizer":
+        optimizer = instantiate(
+            cfg.optimizer,
+            params=model.parameters(),
+            named_parameters=model.named_parameters(),
+        )
+    else:
+        optimizer = instantiate(cfg.optimizer, params=model.parameters())
 
     scheduler_kwargs = {"optimizer": optimizer}
     if "steps_per_epoch" in cfg.scheduler.scheduler_kwargs.keys():
