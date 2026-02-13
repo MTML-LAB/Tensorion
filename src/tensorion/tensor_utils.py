@@ -1,4 +1,3 @@
-import numpy as np
 import torch
 
 
@@ -24,12 +23,13 @@ def unfold(X: Tensor, mode: int) -> Tensor:
 
 def fold(x: Tensor, original_shape: tuple[int], mode: int):
     order = _get_unfold_transpose_order(len(original_shape), mode)
-    inv_order = list(np.argsort(order))
+    inv_order = torch.argsort(torch.tensor(order)).tolist()
+    perm_shape = tuple(original_shape[j] for j in order)
 
     # a = A.reshape(np.array(original_shape)[order])
     # a = np.transpose(a, inv_order)
 
-    X = x.reshape(tuple(np.array(original_shape, dtype=int)[order]))
+    X = x.reshape(*perm_shape)
     X = X.permute(*inv_order)
 
     return X
