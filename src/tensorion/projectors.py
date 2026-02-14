@@ -218,3 +218,75 @@ def single_step_projection(
         "converged": True,
         "history": dict(),
     }
+
+
+def dual_projection(
+    x0: Tensor,
+    projector: Callable[[Tensor, int], Tensor],
+    num_sets: int,
+    max_iter: int = 1000,
+    tol: float = 1e-6,
+    metrics_callback_factory: Optional[MetricsCallbackFactory] = None,
+    device: Optional[torch.device] = None,
+) -> dict[str, Any]:
+    """
+    Accurate algorithm from "Dual norm is all you need" idea
+
+    Return:
+      - 'projection': projection on intersection (Tensor)
+      - 'iterations': number of iterations (int), always == 1
+      - 'converged': bool, always == 1
+      - 'history': dict with metrics history
+    """
+    
+    mode = 0
+    max_nuc_norm = 0.0
+    for idx in range(x0.dim()):
+        X = unfold(x0, idx)
+        norm = torch.linalg.norm(X, ord='nuc')
+
+        if norm > max_nuc_norm:
+            mode = idx
+            max_nuc_norm = norm
+
+    proj = projector(x0, mode)
+
+    return {
+        "projection": proj,
+        "iterations": 1,
+        "converged": True,
+        "history": dict(),
+    }
+
+
+def dual_heuristic_projection(
+    x0: Tensor,
+    projector: Callable[[Tensor, int], Tensor],
+    num_sets: int,
+    max_iter: int = 1000,
+    tol: float = 1e-6,
+    metrics_callback_factory: Optional[MetricsCallbackFactory] = None,
+    device: Optional[torch.device] = None,
+) -> dict[str, Any]:
+    """
+    Heuristic algorithm from "Dual norm is all you need" idea
+
+    Return:
+      - 'projection': projection on intersection (Tensor)
+      - 'iterations': number of iterations (int), always == 1
+      - 'converged': bool, always == 1
+      - 'history': dict with metrics history
+    """
+    
+    x_dims = list(x0.shape)
+    dims_idxs = np.argsort(x_dims)
+
+    mode = dims_idxs[-1]
+    proj = projector(x0, mode)
+
+    return {
+        "projection": proj,
+        "iterations": 1,
+        "converged": True,
+        "history": dict(),
+    }
