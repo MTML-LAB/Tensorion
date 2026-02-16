@@ -4,8 +4,8 @@ defaults:
   - projector: min_mode_projector
 
 params: ???
-lr: 1e-3
-wd: 0.1
+lr: 1e-4
+wd: 1e-4
 momentum: 0.95
 nesterov: false
 nuclear: false
