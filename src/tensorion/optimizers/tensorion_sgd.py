@@ -4,19 +4,20 @@ from .. import tensor_utils
 from .. import projectors
 from .. import loggers
 
+from typing import Callable
+
 
 class TensorionSGD(torch.optim.Optimizer):
     def __init__(
         self,
         params,
-        muon_params,
+        projector: Callable[[torch.Tensor], torch.Tensor],
         lr=1e-3,
         wd=0.1,
         momentum=0.95,
         nesterov=False,
         nuclear=False,
         adjust_lr=True,
-        sgd_params=None,
         sgd_momentum=0.95,
         min_dim: int = 3,
     ):
@@ -30,26 +31,16 @@ class TensorionSGD(torch.optim.Optimizer):
             nuclear=nuclear,
             adjust_lr=adjust_lr,
         )
-
-        muon_params = list(muon_params)
-        sgd_params = list(sgd_params) if sgd_params is not None else []
-        params = muon_params + sgd_params
         
+        params = list(params)
         super().__init__(params, defaults)
-        # Sort parameters into those for which we will use Muon, and those for which we will not
-        for p in muon_params:
-            # Use Tensorion for every parameter in muon_params which is >= min_dim and doesn't look like an embedding or head layer
-            assert p.ndim >= min_dim, p.ndim
-            self.state[p]["use_muon"] = True
-
-        for p in sgd_params:
-            # Do not use Muon for parameters in sgd_params
-            self.state[p]["use_muon"] = False
         
-        self.projector = projectors.build_single_step_projection(
-            projector=projectors.project_spectral_sphere,
-            mode_strategy='min'
-        )
+        # Sort parameters into those for which we will use Muon, and those for which we will not
+        for p in params:
+            self.state[p]["use_muon"] = (p.ndim >= min_dim)
+        
+        self.projector = projector
+        print(f"{self.projector=}")
 
     def adjust_lr_for_muon(self, lr, param_shape):
         A, B = param_shape[:2]

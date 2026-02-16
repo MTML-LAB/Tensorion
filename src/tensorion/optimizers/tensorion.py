@@ -4,19 +4,20 @@ from .. import tensor_utils
 from .. import projectors
 from .. import loggers
 
+from typing import Callable
+
 
 class Tensorion(torch.optim.Optimizer):
     def __init__(
         self,
         params,
-        muon_params,
+        projector: Callable[[torch.Tensor], torch.Tensor],
         lr=1e-3,
         wd=0.1,
         momentum=0.95,
         nesterov=False,
         nuclear=False,
         adjust_lr=True,
-        adamw_params=None,
         adamw_betas=(0.9, 0.95),
         adamw_eps=1e-8,
         min_dim: int = 3,
@@ -32,27 +33,18 @@ class Tensorion(torch.optim.Optimizer):
             adamw_eps=adamw_eps,
         )
 
-        muon_params = list(muon_params)
-        adamw_params = list(adamw_params) if adamw_params is not None else []
-        params = muon_params + adamw_params
-
+        params = list(params)
         super().__init__(params, defaults)
+        
         # Sort parameters into those for which we will use Muon, and those for which we will not
-        for p in muon_params:
-            # Use Tensorion for every parameter in muon_params which is >= min_dim and doesn't look like an embedding or head layer
-            assert p.ndim >= min_dim, p.ndim
-            self.state[p]["use_muon"] = True
-            
-        for p in adamw_params:
-            # Do not use Muon for parameters in adamw_params
-            self.state[p]["use_muon"] = False
+        for p in params:
+            self.state[p]["use_muon"] = (p.ndim >= min_dim)
 
-        self.projector = projectors.build_single_step_projection(
-            projector=projectors.project_spectral_sphere,
-            mode_strategy='min'
-        )
+        self.projector = projector
+        print(f"{self.projector=}")
 
     def adjust_lr_for_muon(self, lr, param_shape):
+        # TODO: align with custom projector
         A, B = param_shape[:2]
         # We adjust the learning rate and weight decay based on the size of the parameter matrix
         # as describted in the paper
@@ -104,7 +96,7 @@ class Tensorion(torch.optim.Optimizer):
                     g = g.add(buf, alpha=momentum)
                 else:
                     g = buf
-                    
+
                 u = self.projector(g)
 
                 if nuclear:
