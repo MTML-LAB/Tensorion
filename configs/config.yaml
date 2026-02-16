@@ -1,10 +1,10 @@
 defaults:
   - dataset: cifar10
   - dataloader: default
-  - models@model: resnet18
-  - optimizers@optimizer: adamw
-  - schedulers@scheduler: onecyclelr
-  - criterions@criterion: ce
+  - model: resnet18
+  - optimizer: adamw
+  - scheduler: onecyclelr
+  - criterion: ce
   - _self_
 
 seed: 42
