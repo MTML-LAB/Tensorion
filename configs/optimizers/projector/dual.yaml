@@ -1,0 +1,5 @@
+_target_: tensorion.projectors.build_dual_projection
+
+projector:
+  _target_: tensorion.projectors.project_spectral_sphere
+  _partial_: true
