@@ -1,8 +1,8 @@
 import numpy as np
 import torch
-from typing import Optional, Union, Callable, Any
+from typing import Optional, Union, Callable, Any, Literal
 
-from .tensor_utils import fold, unfold
+from .tensor_utils import fold, unfold, matricization, un_matricization
 from .loggers import (
     MetricsCallback,
     MetricsCallbackFactory,
@@ -10,59 +10,119 @@ from .loggers import (
 )
 
 Tensor = torch.Tensor
+BaseProjector = Callable[[Tensor, Optional[int]], Tensor]
+ModeStrategy = Callable[[list[int]], int]
 
-# base projectors
+
+# <-- Base projectors -->
 
 
-def project_spectral_ball(x: Tensor, idx: int) -> Tensor:
-    X = unfold(x, idx)
+def unfold_by_idx(x: Tensor, idx: Union[int, list[int], None]) -> Tensor:
+    """
+    :param x (Tensor): Tensor with shape (n_1, ..., n_d)
+    :param idx: 
+        If `None`, function requires only 2D Matrix `x`, returns `x`
+        If `int`, function performs unfolding by mode `idx`
+        If `list[int]`, function performs matricization by modes `idx`
+    """
+
+    if idx is None:
+        X = x
+    elif isinstance(idx, int):
+        X = unfold(x, idx)
+    elif isinstance(idx, list):
+        X = matricization(x, idx)
+    else:
+        raise ValueError(f"Unexpected {idx=}")
+    
+    return X
+
+
+def fold_by_idx(X: Tensor, original_shape: tuple[int], idx: Union[int, list[int], None]) -> Tensor:
+    """
+    :param X (Tensor): Unfolding or matricization of tensor `x`
+    :param original_shape: Shape of the original tensor `x`
+    :param idx: 
+        If `None`, function requires only 2D Matrix `x`, returns `x`
+        If `int`, function performs unfolding by mode `idx`
+        If `list[int]`, function performs matricization by modes `idx`
+    """
+
+    if idx is None:
+        x = X
+    elif isinstance(idx, int):
+        x = fold(X, original_shape, idx)
+    elif isinstance(idx, list):
+        x = un_matricization(X, original_shape, idx)
+    else:
+        raise ValueError(f"Unexpected {idx=}")
+    
+    return x
+
+
+def project_spectral_ball(x: Tensor, idx: Union[int, list[int], None]) -> Tensor:
+    if (idx is None) and (x.ndim > 2):
+        raise ValueError(f"idx may be None only for 2D x\n{x.shape=}\t{idx=}")
+    
+    X = unfold_by_idx(x, idx)
+    
     U, S, Vt = torch.linalg.svd(X, full_matrices=False)
     S = torch.clip(S, min=0.0, max=1.0)
     X = U @ torch.diag(S) @ Vt
 
-    x_proj = fold(X, x.shape, idx)
+    x_proj = fold_by_idx(X, x.shape, idx)
+    
     assert x_proj.shape == x.shape
     return x_proj
 
 
-def project_spectral_sphere(x: Tensor, idx: int) -> Tensor:
-    X = unfold(x, idx)
+def project_spectral_sphere(x: Tensor, idx: Optional[int]) -> Tensor:
+    if (idx is None) and (x.ndim > 2):
+        raise ValueError(f"idx may be None only for 2D x\n{x.shape=}\t{idx=}")
+    
+    X = unfold_by_idx(x, idx)
+
     U, S, Vt = torch.linalg.svd(X, full_matrices=False)
     X = U @ Vt
 
-    x_proj = fold(X, x.shape, idx)
+    x_proj = fold_by_idx(X, x.shape, idx)
+
     assert x_proj.shape == x.shape
     return x_proj
 
 
 def project_ns(x: Tensor, idx: int, num_ns_iterations: int = 2):
-    X = unfold(x, idx)
+    X = unfold_by_idx(x, idx)
+
     transpose = X.shape[0] > X.shape[1]
     if transpose:
         X.transpose_(0, 1)
 
     # m x n, m <= n
-    X /= torch.linalg.norm(X, ord=2)  # TODO: speedup
+
+    X.div_(torch.linalg.norm(X, ord='fro'))
     m = X.shape[0]
     I = torch.eye(m, device=X.device, dtype=X.dtype)
 
     for _ in range(num_ns_iterations):
-        X = (3 * I - X @ X.T) @ (X / 2)  # TODO: speedup
+        X = (3 * I - X @ X.T) @ (X / 2)
 
     if transpose:
         X.transpose_(0, 1)
-    x_proj = fold(X, x.shape, idx)
-    assert x_proj.shape == x.shape
     
+    x_proj = fold_by_idx(X, x.shape, idx)
+
+    assert x_proj.shape == x.shape
     return x_proj
 
+# <!- Base projectors -!>
 
-# intersection projectors
+# <-- Projectors on intersection -->
 
 
 def dykstra(
     x0: Tensor,
-    projector: Callable[[Tensor, int], Tensor],
+    projector: BaseProjector,
     num_sets: int,
     max_iter: int = 1000,
     tol: float = 1e-6,
@@ -129,7 +189,7 @@ def dykstra(
 
 def alternating_projectors(
     x0: Tensor,
-    projector: Callable[[Tensor, int], Tensor],
+    projector: BaseProjector,
     num_sets: int,
     max_iter: int = 1000,
     tol: float = 1e-6,
@@ -186,14 +246,15 @@ def alternating_projectors(
     }
 
 
+# <-- Projectors on intersection -->
+
+# <-- Projectors by modes -->
+
+
 def single_step_projection(
     x0: Tensor,
-    projector: Callable[[Tensor, int], Tensor],
-    num_sets: int,
-    max_iter: int = 1000,
-    tol: float = 1e-6,
-    metrics_callback_factory: Optional[MetricsCallbackFactory] = None,
-    device: Optional[torch.device] = None,
+    projector: BaseProjector,
+    mode_strategy: ModeStrategy,
 ) -> dict[str, Any]:
     """
     Single step heuristic algorithm
@@ -206,10 +267,7 @@ def single_step_projection(
     """
 
     x_dims = list(x0.shape)
-    dims_idxs = np.argsort(x_dims)
-    # assert x_dims[dims_idxs[0]] < x_dims[dims_idxs[1]], f"{x_dims=}\t{dims_idxs=}"
-
-    mode = dims_idxs[0]
+    mode = mode_strategy(x_dims)
     proj = projector(x0, mode)
 
     return {
@@ -222,12 +280,7 @@ def single_step_projection(
 
 def dual_projection(
     x0: Tensor,
-    projector: Callable[[Tensor, int], Tensor],
-    num_sets: int,
-    max_iter: int = 1000,
-    tol: float = 1e-6,
-    metrics_callback_factory: Optional[MetricsCallbackFactory] = None,
-    device: Optional[torch.device] = None,
+    projector: BaseProjector,
 ) -> dict[str, Any]:
     """
     Accurate algorithm from "Dual norm is all you need" idea
@@ -259,17 +312,13 @@ def dual_projection(
     }
 
 
-def dual_heuristic_projection(
+def unfold_projection(
     x0: Tensor,
-    projector: Callable[[Tensor, int], Tensor],
-    num_sets: int,
-    max_iter: int = 1000,
-    tol: float = 1e-6,
-    metrics_callback_factory: Optional[MetricsCallbackFactory] = None,
-    device: Optional[torch.device] = None,
+    projector: BaseProjector,
+    mode_idxs: list[int]
 ) -> dict[str, Any]:
     """
-    Heuristic algorithm from "Dual norm is all you need" idea
+    Orthogonalize the `mode_idxs` unfolding
 
     Return:
       - 'projection': projection on intersection (Tensor)
@@ -278,15 +327,59 @@ def dual_heuristic_projection(
       - 'history': dict with metrics history
     """
     
-    x_dims = list(x0.shape)
-    dims_idxs = np.argsort(x_dims)
-
-    mode = dims_idxs[-1]
-    proj = projector(x0, mode)
-
+    X_unf = matricization(x0, mode_idxs)
+    proj_unf = projector(X_unf, None)
+    proj = un_matricization(proj_unf, x0.shape, mode_idxs)
+    
     return {
         "projection": proj,
         "iterations": 1,
         "converged": True,
         "history": dict(),
     }
+
+
+# <!- Projectors by modes -!>
+
+
+# <-- Projectors factories -->
+
+
+def build_single_step_projection(projector: BaseProjector, mode_strategy: Union[ModeStrategy, Literal['min', 'max']]) -> Callable[[Tensor], Tensor]:
+    if mode_strategy == 'min':
+        _strategy = lambda shape: int(np.argmin(shape))
+    elif mode_strategy == 'max':
+        _strategy = lambda shape: int(np.argmax(shape))
+    elif callable(mode_strategy):
+        _strategy = mode_strategy
+    else:
+        raise ValueError(f"Incorrect {mode_strategy=}. Expected Callable[[list[int]], int] or Literal['min', 'max']")
+    
+    def _single_step_projection(x0: Tensor) -> Tensor:
+        res = single_step_projection(x0, projector, _strategy)
+        proj = res["projection"]
+
+        return proj
+
+    return _single_step_projection
+
+
+def build_dual_projection(projector: BaseProjector):
+    def _dual_projector(x0: Tensor) -> Tensor:
+        res = dual_projection(x0, projector)
+        proj = res["projection"]
+
+        return proj
+
+    return _dual_projector
+
+
+def build_unfold_projection(projector: BaseProjector, mode_idxs: list[int]) -> Callable[[Tensor], Tensor]:
+    def _unfold_projector(x0: Tensor) -> Tensor:
+        res = unfold_projection(x0, projector, mode_idxs)
+        proj = res["projection"]
+
+        return proj
+
+    return _unfold_projector
+

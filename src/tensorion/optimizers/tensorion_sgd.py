@@ -45,6 +45,11 @@ class TensorionSGD(torch.optim.Optimizer):
         for p in sgd_params:
             # Do not use Muon for parameters in sgd_params
             self.state[p]["use_muon"] = False
+        
+        self.projector = projectors.build_single_step_projection(
+            projector=projectors.project_spectral_sphere,
+            mode_strategy='min'
+        )
 
     def adjust_lr_for_muon(self, lr, param_shape):
         A, B = param_shape[:2]
@@ -99,11 +104,8 @@ class TensorionSGD(torch.optim.Optimizer):
                     g = g.add(buf, alpha=momentum)
                 else:
                     g = buf
-                u = projectors.single_step_projection(
-                    x0=g,
-                    projector=projectors.project_spectral_sphere,
-                    num_sets=g.dim(), 
-                )['projection']
+
+                u = self.projector(g)
 
                 if nuclear:
                     nuclear = (g * u).sum()
