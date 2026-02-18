@@ -5,6 +5,7 @@ from .. import projectors
 from .. import loggers
 
 from typing import Callable
+import math
 
 
 class Tensorion(torch.optim.Optimizer):
@@ -43,12 +44,19 @@ class Tensorion(torch.optim.Optimizer):
         self.projector = projector
         print(f"{self.projector=}")
 
-    def adjust_lr_for_muon(self, lr, param_shape):
-        # TODO: align with custom projector
-        A, B = param_shape[:2]
-        # We adjust the learning rate and weight decay based on the size of the parameter matrix
-        # as describted in the paper
-        adjusted_ratio = 0.2 * (max(A, B) ** 0.5)
+    def adjust_lr_for_muon(self, lr, param_shape, u: torch.Tensor):
+        # <-- fast version for fixed ortho mode -->
+        # A, B = (min(param_shape), math.prod(param_shape) // min(param_shape))
+        # # We adjust the learning rate and weight decay based on the size of the parameter matrix
+        # # as describted in the paper
+        # adjusted_ratio = 0.2 * (max(A, B) ** 0.5)
+        # <!- fast version for fixed ortho mode -!>
+
+        # <-- slow version for arbitrary projector -->
+        rms = (u * u).mean().sqrt()
+        adjusted_ratio = 0.2 / rms
+        # <!- slow version for arbitrary projector -!>
+
         adjusted_lr = lr * adjusted_ratio
         return adjusted_lr
 
@@ -105,9 +113,7 @@ class Tensorion(torch.optim.Optimizer):
 
                 if adjust_lr:
                     # scale update
-                    param_shape = p.shape
-                    param_shape = (min(param_shape), g.numel() // min(param_shape))
-                    adjusted_lr = self.adjust_lr_for_muon(lr, param_shape)
+                    adjusted_lr = self.adjust_lr_for_muon(lr, p.shape, u)
                 else:
                     adjusted_lr = lr
 
