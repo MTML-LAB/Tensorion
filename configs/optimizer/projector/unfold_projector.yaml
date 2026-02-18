@@ -5,3 +5,4 @@ projector:
   _partial_: true
 
 mode_idxs: [0, 1]
+requires_irms: true

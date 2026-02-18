@@ -5,14 +5,14 @@ from .. import projectors
 from .. import loggers
 
 from typing import Callable
-import math
+from tensorion.projectors import Projector
 
 
 class Tensorion(torch.optim.Optimizer):
     def __init__(
         self,
         params,
-        projector: Callable[[torch.Tensor], torch.Tensor],
+        projector: Projector,
         lr=1e-3,
         wd=0.1,
         momentum=0.95,
@@ -44,7 +44,7 @@ class Tensorion(torch.optim.Optimizer):
         self.projector = projector
         print(f"{self.projector=}")
 
-    def adjust_lr_for_muon(self, lr, param_shape, u: torch.Tensor):
+    def adjust_lr_for_muon(self, lr, irms: float):
         # <-- fast version for fixed ortho mode -->
         # A, B = (min(param_shape), math.prod(param_shape) // min(param_shape))
         # # We adjust the learning rate and weight decay based on the size of the parameter matrix
@@ -52,11 +52,8 @@ class Tensorion(torch.optim.Optimizer):
         # adjusted_ratio = 0.2 * (max(A, B) ** 0.5)
         # <!- fast version for fixed ortho mode -!>
 
-        # <-- slow version for arbitrary projector -->
-        rms = (u * u).mean().sqrt()
-        adjusted_ratio = 0.2 / rms
-        # <!- slow version for arbitrary projector -!>
-
+        # irms was calculated by projector
+        adjusted_ratio = 0.2 * irms
         adjusted_lr = lr * adjusted_ratio
         return adjusted_lr
 
@@ -105,7 +102,14 @@ class Tensorion(torch.optim.Optimizer):
                 else:
                     g = buf
 
-                u = self.projector(g)
+                proj = self.projector(g)
+
+                if isinstance(proj, tuple):
+                    u, irms = proj
+                else:
+                    if adjust_lr:
+                        raise ValueError("The projector with irms=True required")
+                    u = proj
 
                 if nuclear:
                     nuclear = (g * u).sum()
@@ -113,7 +117,7 @@ class Tensorion(torch.optim.Optimizer):
 
                 if adjust_lr:
                     # scale update
-                    adjusted_lr = self.adjust_lr_for_muon(lr, p.shape, u)
+                    adjusted_lr = self.adjust_lr_for_muon(lr,  irms)
                 else:
                     adjusted_lr = lr
 

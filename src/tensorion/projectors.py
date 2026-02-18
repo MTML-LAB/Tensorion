@@ -1,3 +1,4 @@
+import math
 import numpy as np
 import torch
 from typing import Optional, Union, Callable, Any, Literal
@@ -12,7 +13,7 @@ from .loggers import (
 Tensor = torch.Tensor
 BaseProjector = Callable[[Tensor, Optional[int]], Tensor]
 ModeStrategy = Callable[[list[int]], int]
-
+Projector = Callable[[Tensor], Union[Tensor, tuple[Tensor, float]]]
 
 # <-- Base projectors -->
 
@@ -270,11 +271,15 @@ def single_step_projection(
     mode = mode_strategy(x_dims)
     proj = projector(x0, mode)
 
+    unf_shape = (x0.shape[mode], math.prod(x0.shape) // x0.shape[mode])
+    irms = math.sqrt(max(unf_shape))
+
     return {
         "projection": proj,
         "iterations": 1,
         "converged": True,
         "history": dict(),
+        "irms": irms,
     }
 
 
@@ -304,11 +309,15 @@ def dual_projection(
 
     proj = projector(x0, mode)
 
+    unf_shape = (x0.shape[mode], math.prod(x0.shape) // x0.shape[mode])
+    irms = math.sqrt(max(unf_shape))
+
     return {
         "projection": proj,
         "iterations": 1,
         "converged": True,
         "history": dict(),
+        "irms": irms,
     }
 
 
@@ -331,11 +340,14 @@ def unfold_projection(
     proj_unf = projector(X_unf, None)
     proj = fold_by_idx(proj_unf, x0.shape, mode_idxs)
     
+    irms = math.sqrt(max(X_unf.shape))
+
     return {
         "projection": proj,
         "iterations": 1,
         "converged": True,
         "history": dict(),
+        "irms": irms,
     }
 
 
@@ -345,7 +357,7 @@ def unfold_projection(
 # <-- Projectors factories -->
 
 
-def build_single_step_projection(projector: BaseProjector, mode_strategy: Union[ModeStrategy, Literal['min', 'max']]) -> Callable[[Tensor], Tensor]:
+def build_single_step_projection(projector: BaseProjector, mode_strategy: Union[ModeStrategy, Literal['min', 'max']], requires_irms: bool = False) -> Projector:
     if mode_strategy == 'min':
         _strategy = lambda shape: int(np.argmin(shape))
     elif mode_strategy == 'max':
@@ -355,29 +367,44 @@ def build_single_step_projection(projector: BaseProjector, mode_strategy: Union[
     else:
         raise ValueError(f"Incorrect {mode_strategy=}. Expected Callable[[list[int]], int] or Literal['min', 'max']")
     
-    def _single_step_projection(x0: Tensor) -> Tensor:
+    def _single_step_projection(x0: Tensor) -> Union[Tensor, tuple[Tensor, float]]:
         res = single_step_projection(x0, projector, _strategy)
         proj = res["projection"]
+
+        if requires_irms:
+            irms = res["irms"]
+
+            return proj, irms
 
         return proj
 
     return _single_step_projection
 
 
-def build_dual_projection(projector: BaseProjector):
-    def _dual_projector(x0: Tensor) -> Tensor:
+def build_dual_projection(projector: BaseProjector, requires_irms: bool = False) -> Projector:
+    def _dual_projector(x0: Tensor) -> Union[Tensor, tuple[Tensor, float]]:
         res = dual_projection(x0, projector)
         proj = res["projection"]
+
+        if requires_irms:
+            irms = res["irms"]
+
+            return proj, irms
 
         return proj
 
     return _dual_projector
 
 
-def build_unfold_projection(projector: BaseProjector, mode_idxs: list[int]) -> Callable[[Tensor], Tensor]:
-    def _unfold_projector(x0: Tensor) -> Tensor:
+def build_unfold_projection(projector: BaseProjector, mode_idxs: Union[int, list[int]], requires_irms: bool = False) -> Projector:
+    def _unfold_projector(x0: Tensor) -> Union[Tensor, tuple[Tensor, float]]:
         res = unfold_projection(x0, projector, mode_idxs)
         proj = res["projection"]
+
+        if requires_irms:
+            irms = res["irms"]
+
+            return proj, irms
 
         return proj
 

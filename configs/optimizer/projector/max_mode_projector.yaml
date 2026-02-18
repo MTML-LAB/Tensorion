@@ -5,3 +5,4 @@ projector:
   _partial_: true
 
 mode_strategy: max
+requires_irms: true
