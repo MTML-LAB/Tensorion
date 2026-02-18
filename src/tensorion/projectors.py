@@ -315,7 +315,7 @@ def dual_projection(
 def unfold_projection(
     x0: Tensor,
     projector: BaseProjector,
-    mode_idxs: list[int]
+    mode_idxs: Union[int, list[int]]
 ) -> dict[str, Any]:
     """
     Orthogonalize the `mode_idxs` unfolding
@@ -327,9 +327,9 @@ def unfold_projection(
       - 'history': dict with metrics history
     """
     
-    X_unf = matricization(x0, mode_idxs)
+    X_unf = unfold_by_idx(x0, mode_idxs)
     proj_unf = projector(X_unf, None)
-    proj = un_matricization(proj_unf, x0.shape, mode_idxs)
+    proj = fold_by_idx(proj_unf, x0.shape, mode_idxs)
     
     return {
         "projection": proj,
