@@ -1,7 +1,7 @@
 _target_:  tensorion.optimizers.tensorion.Tensorion
 
 defaults:
-  - projector: min_mode_projector
+  - projector: unfold_projector
 
 params: ???
 lr: 1e-4
