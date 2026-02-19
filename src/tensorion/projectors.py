@@ -1,7 +1,7 @@
 import math
 import numpy as np
 import torch
-from typing import Optional, Union, Callable, Any, Literal
+from typing import Optional, Union, Callable, Any, Literal, Iterable
 
 from .tensor_utils import fold, unfold, matricization, un_matricization
 from .loggers import (
@@ -56,7 +56,7 @@ def fold_by_idx(X: Tensor, original_shape: tuple[int], idx: Union[int, list[int]
     elif isinstance(idx, list):
         x = un_matricization(X, original_shape, idx)
     else:
-        raise ValueError(f"Unexpected {idx=}")
+        raise ValueError(f"Unexpected {idx=}, {type(idx)=}")
     
     return x
 
@@ -396,9 +396,11 @@ def build_dual_projection(projector: BaseProjector, requires_irms: bool = False)
     return _dual_projector
 
 
-def build_unfold_projection(projector: BaseProjector, mode_idxs: Union[int, list[int]], requires_irms: bool = False) -> Projector:
+def build_unfold_projection(projector: BaseProjector, mode_idxs: Union[int, Iterable[int]], requires_irms: bool = False) -> Projector:
+    _mode_idxs = mode_idxs if isinstance(mode_idxs, int) else list(mode_idxs)
+    
     def _unfold_projector(x0: Tensor) -> Union[Tensor, tuple[Tensor, float]]:
-        res = unfold_projection(x0, projector, mode_idxs)
+        res = unfold_projection(x0, projector, _mode_idxs)
         proj = res["projection"]
 
         if requires_irms:
