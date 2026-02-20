@@ -9,7 +9,7 @@ defaults:
 
 seed: 42
 exp_name: unfolding_sweep
-save_dir: "./results/${unfolding_sweep}/${hydra:runtime.choices.optimizer}_${to_str:${hydra:optimizer.projector.mode_idxs}}/lr=${optimizer.lr}"
+save_dir: "./results/${exp_name}/${hydra:runtime.choices.optimizer}_${to_str:${hydra:optimizer.projector.mode_idxs}}/lr=${optimizer.lr}"
 
 num_epochs: 50
 
