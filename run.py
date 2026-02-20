@@ -5,8 +5,7 @@ from omegaconf import OmegaConf, DictConfig
 
 from tensorion import run_experiment
 
-
-OmegaConf.register_new_resolver("list_to_str", lambda x: ",".join(map(str, x)))
+OmegaConf.register_new_resolver("to_str", str)
 
 
 @hydra.main(config_path="./configs", config_name="config.yaml", version_base="1.3")
