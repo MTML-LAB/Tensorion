@@ -19,6 +19,7 @@ comet:
   workspace: null
   project_name: Tensorion
   experiment_name: opt=${hydra:runtime.choices.optimizer}_lr=${optimizer.lr}
+  code_dir: ./src
   tags:
   - DualNorm
   - ${unfolding_sweep}
