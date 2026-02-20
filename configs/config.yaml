@@ -22,16 +22,15 @@ comet:
   code_dir: ./src
   tags:
   - DualNorm
-  - ${unfolding_sweep}
+  - ${exp_name}
   - ${hydra:runtime.choices.model}
   - ${hydra:runtime.choices.dataset}
   - ${hydra:runtime.choices.optimizer}
   - ${hydra:runtime.choices.scheduler}
-  - ${to_str:${hydra:optimizer.projector.mode_idxs}}
+  - ${optimizer.projector.mode_idxs}
   offline: false
   offline_directory: "${save_dir}/comet_offline"
   log_code: false
-  code_dir: null
 
 hydra:
   sweep:
