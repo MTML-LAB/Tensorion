@@ -9,7 +9,7 @@ defaults:
 
 seed: 42
 exp_name: unfolding_sweep
-save_dir: "./results/${exp_name}/${hydra:runtime.choices.optimizer}_${to_str:${hydra:optimizer.projector.mode_idxs}}/lr=${optimizer.lr}"
+save_dir: "./results/${exp_name}/${hydra:runtime.choices.optimizer}/lr=${optimizer.lr}/${hydra.job.override_dirname}"
 
 num_epochs: 25
 
@@ -27,7 +27,6 @@ comet:
   - ${hydra:runtime.choices.dataset}
   - ${hydra:runtime.choices.optimizer}
   - ${hydra:runtime.choices.scheduler}
-  - ${optimizer.projector.mode_idxs}
   offline: false
   offline_directory: "${save_dir}/comet_offline"
   log_code: true
