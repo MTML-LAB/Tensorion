@@ -1,6 +1,8 @@
 import torch
 import math
+import itertools
 
+from typing import Union
 
 Tensor = torch.Tensor
 
@@ -49,7 +51,7 @@ def unfold(X: Tensor, mode: int) -> Tensor:
     return x
 
 
-def fold(x: Tensor, original_shape: tuple[int], mode: int):
+def fold(x: Tensor, original_shape: Union[tuple[int], torch.Size], mode: int):
     order = _get_unfold_transpose_order(len(original_shape), mode)
     inv_order = inverse_order(len(original_shape), order)
     perm_shape = tuple(original_shape[j] for j in order)
@@ -97,7 +99,7 @@ def matricization(X: Tensor, modes: list[int]) -> Tensor:
     return x
 
 
-def un_matricization(x: Tensor, original_shape: tuple[int], modes: list[int]) -> Tensor:
+def un_matricization(x: Tensor, original_shape: Union[tuple[int], torch.Size], modes: list[int]) -> Tensor:
     """
     Inverse of `matricization`: fold a matrix back into a tensor.
 
@@ -130,6 +132,36 @@ def un_matricization(x: Tensor, original_shape: tuple[int], modes: list[int]) ->
 
     return X
 
+
+def all_two_bucket_partitions(d: int) -> list[tuple[list[int], list[int]]]:
+    """
+    Build all unique partitions of range(d) into two (unordered) buckets.
+
+    Returns pairs (A, B) such that:
+      - A ∪ B = {0, ..., d-1}
+      - A ∩ B = ∅
+      - both buckets are non-empty
+      - (A, B) and (B, A) are considered the same partition and returned once
+    """
+    if d < 2:
+        return []
+
+    elems = list(range(d))
+    out: list[tuple[list[int], list[int]]] = []
+
+    # To avoid duplicates (A,B) vs (B,A), fix bucket A to have size <= d//2
+    for k in range(1, d // 2 + 1):
+        for A in itertools.combinations(elems, k):
+            B = [e for e in elems if e not in A]
+
+            # If d is even and k == d/2, keep only one of each complementary pair
+            # by requiring 0 to be in A (arbitrary but consistent tie-breaker).
+            if d % 2 == 0 and k * 2 == d and 0 not in A:
+                continue
+
+            out.append((list(A), B))
+
+    return out
 
 
 def get_unfoldings_sigvals(x: Tensor) -> list[Tensor]:

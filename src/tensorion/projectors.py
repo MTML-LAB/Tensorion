@@ -3,7 +3,7 @@ import numpy as np
 import torch
 from typing import Optional, Union, Callable, Any, Literal, Iterable
 
-from .tensor_utils import fold, unfold, matricization, un_matricization
+from .tensor_utils import fold, unfold, matricization, un_matricization, all_two_bucket_partitions
 from .loggers import (
     MetricsCallback,
     MetricsCallbackFactory,
@@ -39,7 +39,7 @@ def unfold_by_idx(x: Tensor, idx: Union[int, list[int], None]) -> Tensor:
     return X
 
 
-def fold_by_idx(X: Tensor, original_shape: tuple[int], idx: Union[int, list[int], None]) -> Tensor:
+def fold_by_idx(X: Tensor, original_shape: Union[tuple[int], torch.Size], idx: Union[int, list[int], None]) -> Tensor:
     """
     :param X (Tensor): Unfolding or matricization of tensor `x`
     :param original_shape: Shape of the original tensor `x`
@@ -297,20 +297,28 @@ def dual_projection(
       - 'history': dict with metrics history
     """
     
-    mode = 0
+    modes = [0]
     max_nuc_norm = 0.0
-    for idx in range(x0.dim()):
-        X = unfold(x0, idx)
-        norm = torch.linalg.norm(X, ord='nuc')
+    U_proj, Vt_proj = None, None
+
+    parts = all_two_bucket_partitions(x0.ndim)
+    for idxs, idxs_compl in parts:
+        A_unf = matricization(x0, modes=idxs)
+        U, S, Vt = torch.linalg.svd(A_unf, full_matrices=False)
+        norm = S.sum()
 
         if norm > max_nuc_norm:
-            mode = idx
+            modes = idxs
             max_nuc_norm = norm
 
-    proj = projector(x0, mode)
+            U_proj, Vt_proj = U, Vt
 
-    unf_shape = (x0.shape[mode], math.prod(x0.shape) // x0.shape[mode])
+    assert (U_proj is not None) and (Vt_proj is not None), f"{max_nuc_norm=}\t{modes=}"
+    X_proj = U_proj @ Vt_proj
+    unf_shape = X_proj.shape
     irms = math.sqrt(max(unf_shape))
+
+    proj = un_matricization(X_proj, original_shape=x0.shape, modes=modes)
 
     return {
         "projection": proj,
@@ -318,6 +326,7 @@ def dual_projection(
         "converged": True,
         "history": dict(),
         "irms": irms,
+        "modes": modes,
     }
 
 
