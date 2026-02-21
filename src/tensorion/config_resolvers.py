@@ -19,12 +19,13 @@ def _normalize_to_list(value: Any) -> list[Any]:
     return [value]
 
 
-def append_to_list(list_value: Any, extra_list: Any) -> list[Any]:
-    result = _normalize_to_list(list_value)
+def append_to_list(list_value: Any, extra_list: Any) -> ListConfig:
+    result: list = _normalize_to_list(list_value)
     for item in _normalize_to_list(extra_list):
         if item != "":
             result.append(item)
-    return result
+    
+    return OmegaConf.create(result)
 
 
 def register_resolvers() -> None:
