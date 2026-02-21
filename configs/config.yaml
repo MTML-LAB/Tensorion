@@ -9,7 +9,7 @@ defaults:
 
 seed: 42
 exp_name: unfolding_sweep
-save_dir: "./results/${exp_name}/${hydra:runtime.choices.optimizer}/lr=${optimizer.lr}/${hydra.job.override_dirname}"
+save_dir: "./results/${exp_name}/${hydra:runtime.choices.optimizer}/lr=${optimizer.lr}/${hydra:job.override_dirname}"
 
 num_epochs: 25
 
@@ -20,13 +20,15 @@ comet:
   project_name: Tensorion
   experiment_name: opt=${hydra:runtime.choices.optimizer}_lr=${optimizer.lr}
   code_dir: ./src
-  tags:
+  _tags:
   - DualNorm
   - ${exp_name}
   - ${hydra:runtime.choices.model}
   - ${hydra:runtime.choices.dataset}
   - ${hydra:runtime.choices.optimizer}
   - ${hydra:runtime.choices.scheduler}
+  extra_tags: []
+  tags: ${append:${comet._tags}, ${comet.extra_tags}}
   offline: false
   offline_directory: "${save_dir}/comet_offline"
   log_code: true
@@ -34,7 +36,7 @@ comet:
 hydra:
   sweep:
     dir: multirun/
-    subdir: ${hydra:runtime.choices.optimizer}/lr=${optimizer.lr}/${hydra.job.override_dirname}
+    subdir: ${hydra:runtime.choices.optimizer}/lr=${optimizer.lr}/${hydra:job.override_dirname}
   job:
     config:
       override_dirname:

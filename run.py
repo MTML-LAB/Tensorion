@@ -1,12 +1,12 @@
 import sys
 
 import hydra
-from omegaconf import OmegaConf, DictConfig
+from omegaconf import DictConfig
 
 from tensorion import run_experiment
+from tensorion.config_resolvers import register_resolvers
 
-OmegaConf.register_new_resolver("to_str", str)
-
+register_resolvers()
 
 @hydra.main(config_path="./configs", config_name="config.yaml", version_base="1.3")
 def main(cfg: DictConfig):
