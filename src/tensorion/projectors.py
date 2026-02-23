@@ -407,7 +407,7 @@ def maxrank_mode(shape: Union[tuple[int], torch.Size]) -> list[int]:
 # <-- Projectors factories -->
 
 
-def build_single_step_projection(projector: BaseProjector, mode_strategy: Union[ModeStrategy, Literal['min', 'max']], requires_irms: bool = False) -> Projector:
+def build_single_step_projection(projector: BaseProjector, mode_strategy: Union[ModeStrategy, Literal['min', 'max', 'maxrank']], requires_irms: bool = False) -> Projector:
     if mode_strategy == 'min':
         _strategy: ModeStrategy = min_mode
     elif mode_strategy == 'max':
@@ -417,7 +417,7 @@ def build_single_step_projection(projector: BaseProjector, mode_strategy: Union[
     elif callable(mode_strategy):
         _strategy = mode_strategy
     else:
-        raise ValueError(f"Incorrect {mode_strategy=}. Expected {ModeStrategy} or Literal['min', 'max']")
+        raise ValueError(f"Incorrect {mode_strategy=}. Expected {ModeStrategy} or Literal['min', 'max', 'maxrank']")
     
     def _single_step_projection(x0: Tensor) -> Union[Tensor, tuple[Tensor, float]]:
         res = single_step_projection(x0, projector, _strategy)
