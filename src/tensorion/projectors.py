@@ -11,8 +11,8 @@ from .loggers import (
 )
 
 Tensor = torch.Tensor
-BaseProjector = Callable[[Tensor, Optional[int]], Tensor]
-ModeStrategy = Callable[[list[int]], int]
+BaseProjector = Callable[[Tensor, Union[int, list[int], None]], Tensor]
+ModeStrategy = Callable[[tuple[int] | torch.Size], Union[int, list[int], None]]
 Projector = Callable[[Tensor], Union[Tensor, tuple[Tensor, float]]]
 
 # <-- Base projectors -->
@@ -77,7 +77,7 @@ def project_spectral_ball(x: Tensor, idx: Union[int, list[int], None]) -> Tensor
     return x_proj
 
 
-def project_spectral_sphere(x: Tensor, idx: Optional[int]) -> Tensor:
+def project_spectral_sphere(x: Tensor, idx: Union[int, list[int], None]) -> Tensor:
     if (idx is None) and (x.ndim > 2):
         raise ValueError(f"idx may be None only for 2D x\n{x.shape=}\t{idx=}")
     
@@ -92,7 +92,7 @@ def project_spectral_sphere(x: Tensor, idx: Optional[int]) -> Tensor:
     return x_proj
 
 
-def project_ns(x: Tensor, idx: int, num_ns_iterations: int = 2):
+def project_ns(x: Tensor, idx: Union[int, list[int], None], num_ns_iterations: int = 2):
     X = unfold_by_idx(x, idx)
 
     transpose = X.shape[0] > X.shape[1]
@@ -267,11 +267,21 @@ def single_step_projection(
       - 'history': dict with metrics history
     """
 
-    x_dims = list(x0.shape)
-    mode = mode_strategy(x_dims)
+    mode = mode_strategy(x0.shape)
     proj = projector(x0, mode)
 
-    unf_shape = (x0.shape[mode], math.prod(x0.shape) // x0.shape[mode])
+    # unf_shape = (x0.shape[mode], math.prod(x0.shape) // x0.shape[mode])
+    if mode is None:
+        unf_shape = x0.shape
+    elif isinstance(mode, int):
+        unf_shape = (x0.shape[mode], math.prod(x0.shape) // x0.shape[mode])
+    elif isinstance(mode, list):
+        A = math.prod(x0.shape[i] for i in mode)
+        B = math.prod(x0.shape) // A
+        unf_shape = (A, B)
+    else:
+        raise ValueError(f"Unexpected {mode=}")
+
     irms = math.sqrt(max(unf_shape))
 
     return {
@@ -363,18 +373,51 @@ def unfold_projection(
 # <!- Projectors by modes -!>
 
 
+# <-- Modes strategies -->
+
+
+def min_mode(shape: Union[tuple[int], torch.Size]) -> int:
+    return int(np.argmin(shape))
+
+
+def max_mode(shape: Union[tuple[int], torch.Size]) -> int:
+    return int(np.argmax(shape))
+
+
+def maxrank_mode(shape: Union[tuple[int], torch.Size]) -> list[int]:
+    mr = 0
+    mr_idxs = None
+
+    parts = all_two_bucket_partitions(len(shape))
+    for idxs, idxs_compl in parts:
+        A = math.prod(shape[i] for i in idxs)
+        B = math.prod(shape[i] for i in idxs_compl)
+
+        if min(A, B) > mr:
+            mr = min(A, B)
+            mr_idxs = idxs
+    
+    assert mr_idxs is not None
+    return mr_idxs
+
+
+# <!- Modes strategies -!>
+
+
 # <-- Projectors factories -->
 
 
 def build_single_step_projection(projector: BaseProjector, mode_strategy: Union[ModeStrategy, Literal['min', 'max']], requires_irms: bool = False) -> Projector:
     if mode_strategy == 'min':
-        _strategy = lambda shape: int(np.argmin(shape))
+        _strategy: ModeStrategy = min_mode
     elif mode_strategy == 'max':
-        _strategy = lambda shape: int(np.argmax(shape))
+        _strategy: ModeStrategy = max_mode
+    elif mode_strategy == 'maxrank':
+        _strategy: ModeStrategy = maxrank_mode
     elif callable(mode_strategy):
         _strategy = mode_strategy
     else:
-        raise ValueError(f"Incorrect {mode_strategy=}. Expected Callable[[list[int]], int] or Literal['min', 'max']")
+        raise ValueError(f"Incorrect {mode_strategy=}. Expected {ModeStrategy} or Literal['min', 'max']")
     
     def _single_step_projection(x0: Tensor) -> Union[Tensor, tuple[Tensor, float]]:
         res = single_step_projection(x0, projector, _strategy)
