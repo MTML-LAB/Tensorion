@@ -30,11 +30,11 @@ cv = [
 optimization = [
     "cvxpy (>=1.8.1,<2.0.0)",
 ]
-dev = [
-    "pytest (>=9.0.2,<10.0.0)",
-    "pytest-cov (>=7.0.0,<8.0.0)",
-    "jupyter (>=1.1.1,<2.0.0)",
-]
+
+[tool.poetry.group.dev.dependencies]
+pytest = ">=9.0.2,<10.0.0"
+pytest-cov = ">=7.0.0,<8.0.0"
+jupyter = ">=1.1.1,<2.0.0"
 
 [tool.poetry]
 packages = [
