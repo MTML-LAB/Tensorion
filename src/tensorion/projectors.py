@@ -1,9 +1,13 @@
 import numpy as np
 import torch
-from typing import Optional, Union, Callable, Any
+import operator
+import math
+from typing import Optional, Union, Callable, Any, Dict
 
-from .tensor_utils import fold, unfold
-from .loggers import (
+from itertools import chain
+from tensorion.tensor_utils import fold, unfold, partitions, invert_permutation
+from tensorion.optimizers.utils import cans_svd, cans_polar_iteration
+from tensorion.loggers import (
     MetricsCallback,
     MetricsCallbackFactory,
     projectors_metrics_collector_factory,
@@ -14,9 +18,18 @@ Tensor = torch.Tensor
 # base projectors
 
 
-def project_spectral_ball(x: Tensor, idx: int) -> Tensor:
+def project_spectral_ball(
+    x: Tensor,
+    idx: int,
+    *,
+    use_cans_svd: bool = False,
+    cans_svd_kwargs: Optional[Dict[str, Any]] = None,
+) -> Tensor:
     X = unfold(x, idx)
-    U, S, Vt = torch.linalg.svd(X, full_matrices=False)
+    if use_cans_svd:
+        U, S, Vt = cans_svd.cans_svd(X, **(cans_svd_kwargs or {}))
+    else:
+        U, S, Vt = torch.linalg.svd(X, full_matrices=False)
     S = torch.clip(S, min=0.0, max=1.0)
     X = U @ torch.diag(S) @ Vt
 
@@ -25,10 +38,19 @@ def project_spectral_ball(x: Tensor, idx: int) -> Tensor:
     return x_proj
 
 
-def project_spectral_sphere(x: Tensor, idx: int) -> Tensor:
+def project_spectral_sphere(
+    x: Tensor,
+    idx: int,
+    *,
+    use_cans_svd: bool = False,
+    cans_svd_kwargs: Optional[Dict[str, Any]] = None,
+) -> Tensor:
     X = unfold(x, idx)
-    U, S, Vt = torch.linalg.svd(X, full_matrices=False)
-    X = U @ Vt
+    if use_cans_svd:
+        X = cans_polar_iteration(X, **(cans_svd_kwargs or {}))
+    else:
+        U, S, Vt = torch.linalg.svd(X, full_matrices=False)
+        X = U @ Vt
 
     x_proj = fold(X, x.shape, idx)
     assert x_proj.shape == x.shape
@@ -183,6 +205,81 @@ def alternating_projectors(
         "iterations": max_iter,
         "converged": False,
         "history": history,
+    }
+
+
+def st_hosvd_truncation(
+    x0: Tensor, 
+    *,
+    ranks: Union[list[int], int], # currently only supports fixed rank (fix later)
+    use_cans_svd: bool = False,
+    cans_svd_kwargs: Optional[Dict[str, Any]] = None,
+    ) -> Tensor:
+    
+    x_dims = list(x0.shape)
+    dims_idxs = np.argsort(x_dims)
+    if isinstance(ranks, int):
+        ranks = [ranks] * len(x_dims)
+    else:
+        ranks = operator.itemgetter(*dims_idxs)(ranks)
+
+    mode = dims_idxs[0]
+    x = x0
+    factors = []
+
+    for mode, rank in zip(dims_idxs, ranks):
+        x = unfold(x, mode)
+        rank = min(rank, x0.shape[0])
+        u_t, *_ = cans_svd.cans_svd(x0, **(cans_svd_kwargs or {}))
+        orthoprojector = u_t[:, :rank]
+
+        x = orthoprojector.T @ x
+        factors.append(orthoprojector)
+        
+        x = fold(x, x.shape, mode)
+    
+    return x, factors
+
+
+def st_hosvd_projection(
+    x: Tensor, 
+    *,
+    use_cans_svd: bool = False,
+    cans_svd_kwargs: Optional[Dict[str, Any]] = None,
+) -> Tensor:
+    
+    reshapes = partitions(x.dim())
+    best_val = float('-inf')
+    
+    for reshape in reshapes:
+
+        perm = [*chain.from_iterable(reshape)]
+        x = x.permute(*perm)
+
+        perm_shape = x.shape
+        prod_shape = math.prod([x.shape[i] for i in reshape[0]])
+        
+        x_reshaped = x.reshape(prod_shape, -1)
+
+        u, s, v = cans_svd.cans_svd(x_reshaped, **(cans_svd_kwargs or {}))
+        nuclear_norm = s.sum()
+
+        inv_order = invert_permutation(perm)
+        
+        x = x.reshape(*perm_shape)
+        x = x.permute(*inv_order)
+
+        if nuclear_norm > best_val:
+            best_val = nuclear_norm
+            x_orth = u @ v.T
+            x_orth = x_orth.reshape(*perm_shape)
+            x_orth = x_orth.permute(*inv_order)
+    
+    return {
+        "projection": x_orth,
+        "iterations": 1,
+        "converged": True,
+        "history": dict(),
     }
 
 

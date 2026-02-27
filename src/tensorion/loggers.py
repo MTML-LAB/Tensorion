@@ -2,7 +2,7 @@ import torch
 from torch import nn
 from typing import Optional, Callable, Any
 
-from . import tensor_utils
+from tensorion import tensor_utils
 
 Tensor = torch.Tensor
 MetricsCallback = Optional[Callable[[Tensor, int, int], None]]

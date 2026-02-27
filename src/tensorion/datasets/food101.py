@@ -1,10 +1,7 @@
 from typing import Optional
-
 from torch.utils.data import Dataset
-
 from omegaconf import DictConfig
-
-from ..data_transforms import build_split_transform
+from tensorion.data_transforms import build_split_transform
 
 
 __all__ = ['_load_food101']

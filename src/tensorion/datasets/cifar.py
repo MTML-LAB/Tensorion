@@ -5,7 +5,7 @@ from torch.utils.data import Subset
 
 from omegaconf import DictConfig
 
-from ..data_transforms import build_split_transform
+from tensorion.data_transforms import build_split_transform
 
 
 __all__ = ['_load_CIFAR10', '_load_CIFAR100']

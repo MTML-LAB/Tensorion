@@ -2,9 +2,7 @@
 
 PyTorch optimizer library for matrix and tensor layers. Install just the optimizer core, or add optional extras for experiments and validation.
 
-## Installation
-
-### Core (optimizers only)
+## Installation### Core (optimizers only)
 
 ```bash
 pip install tensorion
@@ -34,9 +32,7 @@ Core dependencies: `numpy`, `torch`, `scipy`
 - **`dev`** - Testing and development tools  
   ```bash
   pip install "tensorion[dev]"
-  ```
-
-Combine extras as needed:
+  ```Combine extras as needed:
 ```bash
 pip install "tensorion[experiments,cv,optimization]"
 ```

@@ -15,13 +15,13 @@ from hydra.utils import instantiate
 import re
 from typing import Union, Optional, Literal, Callable, Any
 
-from .models import resnet, vit
-from .optimizers import tensorion, tensorion_sgd
-from .schedulers import WarmupCosineAnnealingWarmRestarts
+from tensorion.models import resnet, vit
+from tensorion.optimizers import tensorion, tensorion_sgd
+from tensorion.schedulers import WarmupCosineAnnealingWarmRestarts
 
-from . import data_preparation
-from .train import train_loop
-from .experiment_logger import build_experiment_logger
+from tensorion import data_preparation
+from tensorion.train import train_loop
+from tensorion.experiment_logger import build_experiment_logger
 
 
 def set_global_seed(seed: int) -> torch.Generator:

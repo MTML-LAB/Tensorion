@@ -6,11 +6,11 @@ from torch.utils.data import Dataset, DataLoader
 
 from omegaconf import OmegaConf
 import os
-from .loggers import RandomGradLogger
+from tensorion.loggers import RandomGradLogger
 from typing import Union, Optional, Literal, Callable, Any
 import pathlib
 
-from .experiment_logger import ExperimentLogger
+from tensorion.experiment_logger import ExperimentLogger
 
 @torch.no_grad()
 def save_checkpoint(

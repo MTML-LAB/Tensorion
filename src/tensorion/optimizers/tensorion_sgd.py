@@ -1,8 +1,9 @@
 import torch
 
-from .. import tensor_utils
-from .. import projectors
-from .. import loggers
+from tensorion import tensor_utils
+from tensorion import projectors
+from tensorion import loggers
+from functools import partial
 
 
 class TensorionSGD(torch.optim.Optimizer):
@@ -19,6 +20,8 @@ class TensorionSGD(torch.optim.Optimizer):
         sgd_params=None,
         sgd_momentum=0.95,
         min_dim: int = 3,
+        use_cans_svd: bool = False,
+        cans_svd_kwargs: dict | None = None,
     ):
 
         defaults = dict(
@@ -29,6 +32,8 @@ class TensorionSGD(torch.optim.Optimizer):
             sgd_momentum=sgd_momentum,
             nuclear=nuclear,
             adjust_lr=adjust_lr,
+            use_cans_svd=use_cans_svd,
+            cans_svd_kwargs=cans_svd_kwargs,
         )
 
         muon_params = list(muon_params)
@@ -81,6 +86,8 @@ class TensorionSGD(torch.optim.Optimizer):
             momentum = group["momentum"]
             nuclear = group["nuclear"]
             adjust_lr = group["adjust_lr"]
+            use_cans_svd = group.get("use_cans_svd", False)
+            cans_svd_kwargs = group.get("cans_svd_kwargs", None)
 
             # generate weight updates
             for p in params:
@@ -99,11 +106,21 @@ class TensorionSGD(torch.optim.Optimizer):
                     g = g.add(buf, alpha=momentum)
                 else:
                     g = buf
+
+                if use_cans_svd:
+                    projector = partial(
+                        projectors.project_spectral_sphere,
+                        use_cans_svd=True,
+                        cans_svd_kwargs=cans_svd_kwargs,
+                    )
+                else:
+                    projector = projectors.project_spectral_sphere
+
                 u = projectors.single_step_projection(
                     x0=g,
-                    projector=projectors.project_spectral_sphere,
-                    num_sets=g.dim(), 
-                )['projection']
+                    projector=projector,
+                    num_sets=g.dim(),
+                )["projection"]
 
                 if nuclear:
                     nuclear = (g * u).sum()
