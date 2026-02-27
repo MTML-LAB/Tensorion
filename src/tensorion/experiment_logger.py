@@ -133,7 +133,9 @@ def build_experiment_logger(cfg: DictConfig) -> ExperimentLogger:
     offline = bool(comet_cfg.get("offline", False))
 
     if not api_key and not offline:
-        warnings.warn("Comet enabled but no API key set; disable or enable offline mode.")
+        warnings.warn(
+            "Comet enabled but no API key set; disable or enable offline mode."
+        )
         return NullExperimentLogger("comet.no_api_key")
 
     experiment_cls = OfflineExperiment if (offline and not api_key) else Experiment
@@ -151,7 +153,9 @@ def build_experiment_logger(cfg: DictConfig) -> ExperimentLogger:
     if api_key:
         exp_kwargs["api_key"] = api_key
 
-    experiment = experiment_cls(**{k: v for k, v in exp_kwargs.items() if v is not None})
+    experiment = experiment_cls(
+        **{k: v for k, v in exp_kwargs.items() if v is not None}
+    )
     logger = CometExperimentLogger(experiment)
     _configure_experiment(logger, cfg, comet_cfg, offline=offline)
     return logger

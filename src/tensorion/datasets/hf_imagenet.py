@@ -7,7 +7,7 @@ from omegaconf import DictConfig
 from tensorion.data_transforms import build_split_transform
 
 
-__all__ = ['_load_imagenet']
+__all__ = ["_load_imagenet"]
 
 
 class HF_imagenet(Dataset):

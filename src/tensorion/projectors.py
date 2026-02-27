@@ -6,9 +6,8 @@ from typing import Optional, Union, Callable, Any, Dict
 
 from itertools import chain
 from tensorion.tensor_utils import fold, unfold, partitions, invert_permutation
-from tensorion.optimizers.utils import cans_svd, cans_polar_iteration
+from tensorion.optimizers.utils.cans_svd import cans_svd, cans_polar_iteration
 from tensorion.loggers import (
-    MetricsCallback,
     MetricsCallbackFactory,
     projectors_metrics_collector_factory,
 )
@@ -27,7 +26,7 @@ def project_spectral_ball(
 ) -> Tensor:
     X = unfold(x, idx)
     if use_cans_svd:
-        U, S, Vt = cans_svd.cans_svd(X, **(cans_svd_kwargs or {}))
+        U, S, Vt = cans_svd(X, **(cans_svd_kwargs or {}))
     else:
         U, S, Vt = torch.linalg.svd(X, full_matrices=False)
     S = torch.clip(S, min=0.0, max=1.0)
@@ -75,7 +74,7 @@ def project_ns(x: Tensor, idx: int, num_ns_iterations: int = 2):
         X.transpose_(0, 1)
     x_proj = fold(X, x.shape, idx)
     assert x_proj.shape == x.shape
-    
+
     return x_proj
 
 
@@ -209,13 +208,13 @@ def alternating_projectors(
 
 
 def st_hosvd_truncation(
-    x0: Tensor, 
+    x0: Tensor,
     *,
-    ranks: Union[list[int], int], # currently only supports fixed rank (fix later)
+    ranks: Union[list[int], int],  # currently only supports fixed rank (fix later)
     use_cans_svd: bool = False,
     cans_svd_kwargs: Optional[Dict[str, Any]] = None,
-    ) -> Tensor:
-    
+) -> Tensor:
+
     x_dims = list(x0.shape)
     dims_idxs = np.argsort(x_dims)
     if isinstance(ranks, int):
@@ -228,53 +227,63 @@ def st_hosvd_truncation(
     factors = []
 
     for mode, rank in zip(dims_idxs, ranks):
-        x = unfold(x, mode)
-        rank = min(rank, x0.shape[0])
-        u_t, *_ = cans_svd.cans_svd(x0, **(cans_svd_kwargs or {}))
-        orthoprojector = u_t[:, :rank]
+        original_shape = x.shape
+        x_unfolded = unfold(x, mode)
+        rank = min(rank, x_unfolded.shape[0])
 
-        x = orthoprojector.T @ x
+        if use_cans_svd:
+            u_t, *_ = cans_svd(x_unfolded, **(cans_svd_kwargs or {}))
+        else:
+            u_t, *_ = torch.linalg.svd(x_unfolded, full_matrices=False)
+
+        orthoprojector = u_t[:, :rank]
+        x = orthoprojector.T @ x_unfolded
         factors.append(orthoprojector)
-        
-        x = fold(x, x.shape, mode)
-    
+
+        # Compute new shape after projection: replace original_shape[mode] with rank
+        new_shape = list(original_shape)
+        new_shape[mode] = rank
+        new_shape = tuple(new_shape)
+        x = fold(x, new_shape, mode)
+
     return x, factors
 
 
 def st_hosvd_projection(
-    x: Tensor, 
+    x: Tensor,
     *,
     use_cans_svd: bool = False,
     cans_svd_kwargs: Optional[Dict[str, Any]] = None,
 ) -> Tensor:
-    
-    reshapes = partitions(x.dim())
-    best_val = float('-inf')
-    
-    for reshape in reshapes:
 
+    reshapes = partitions(x.dim())
+    best_val = float("-inf")
+
+    for reshape in reshapes:
         perm = [*chain.from_iterable(reshape)]
         x = x.permute(*perm)
 
         perm_shape = x.shape
         prod_shape = math.prod([x.shape[i] for i in reshape[0]])
-        
+
         x_reshaped = x.reshape(prod_shape, -1)
 
-        u, s, v = cans_svd.cans_svd(x_reshaped, **(cans_svd_kwargs or {}))
+        u, s, vt = cans_svd(x_reshaped, **(cans_svd_kwargs or {}))
         nuclear_norm = s.sum()
 
         inv_order = invert_permutation(perm)
-        
+
         x = x.reshape(*perm_shape)
         x = x.permute(*inv_order)
 
         if nuclear_norm > best_val:
             best_val = nuclear_norm
-            x_orth = u @ v.T
+            # cans_svd returns (U, s, V.T), so v is already V.T
+            # For polar projection (spectral sphere), we want U @ V.T = u @ v
+            x_orth = u @ vt
             x_orth = x_orth.reshape(*perm_shape)
             x_orth = x_orth.permute(*inv_order)
-    
+
     return {
         "projection": x_orth,
         "iterations": 1,

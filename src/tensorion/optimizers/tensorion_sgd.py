@@ -1,8 +1,6 @@
 import torch
 
-from tensorion import tensor_utils
 from tensorion import projectors
-from tensorion import loggers
 from functools import partial
 
 
@@ -39,7 +37,7 @@ class TensorionSGD(torch.optim.Optimizer):
         muon_params = list(muon_params)
         sgd_params = list(sgd_params) if sgd_params is not None else []
         params = muon_params + sgd_params
-        
+
         super().__init__(params, defaults)
         # Sort parameters into those for which we will use Muon, and those for which we will not
         for p in muon_params:
@@ -74,7 +72,6 @@ class TensorionSGD(torch.optim.Optimizer):
                 loss = closure()
 
         for group in self.param_groups:
-
             ############################
             #           Muon           #
             ############################
@@ -145,7 +142,7 @@ class TensorionSGD(torch.optim.Optimizer):
             ############################
 
             params = [p for p in group["params"] if not self.state[p]["use_muon"]]
-            lr = group['lr']
+            lr = group["lr"]
             mu = group["sgd_momentum"]
             weight_decay = group["wd"]
 

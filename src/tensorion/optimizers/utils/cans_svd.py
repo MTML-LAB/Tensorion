@@ -2,9 +2,16 @@ import torch
 
 from tensorion.optimizers.utils.cans import cans_iteration
 
-def cans_svd(matrix: torch.Tensor, degree: int = 3, preprocess: bool = True,
-               preprocess_iters: int = 2, delta: float = 0.99, a: float = 1e-3,
-               num_iters: int = 50) -> torch.Tensor:
+
+def cans_svd(
+    matrix: torch.Tensor,
+    degree: int = 3,
+    preprocess: bool = True,
+    preprocess_iters: int = 2,
+    delta: float = 0.99,
+    a: float = 1e-3,
+    num_iters: int = 50,
+) -> torch.Tensor:
     """
     Compute the SVD of a matrix using the CANS method.
 
@@ -43,9 +50,9 @@ def cans_svd(matrix: torch.Tensor, degree: int = 3, preprocess: bool = True,
     H = W.T @ matrix
     H = 0.5 * (H + H.T)
 
-    S, V = torch.linalg.eigh(H)   # ascending order
+    S, V = torch.linalg.eigh(H)  # ascending order
     U = W @ V
-    
+
     U, R = torch.linalg.qr(U, mode="reduced")
     s = torch.diagonal(R) * S
 
@@ -67,10 +74,15 @@ def cans_svd(matrix: torch.Tensor, degree: int = 3, preprocess: bool = True,
         return V, s, U.T
 
 
-
-def cans_polar_iteration(matrix: torch.Tensor, degree: int = 3, preprocess: bool = True,
-               preprocess_iters: int = 2, delta: float = 0.99, a: float = 1e-3,
-               num_iters: int = 50) -> torch.Tensor:
+def cans_polar_iteration(
+    matrix: torch.Tensor,
+    degree: int = 3,
+    preprocess: bool = True,
+    preprocess_iters: int = 2,
+    delta: float = 0.99,
+    a: float = 1e-3,
+    num_iters: int = 50,
+) -> torch.Tensor:
     """
     Compute the polar iteration of a matrix using the CANS method.
     """
@@ -79,7 +91,7 @@ def cans_polar_iteration(matrix: torch.Tensor, degree: int = 3, preprocess: bool
     if matrix.shape[0] < matrix.shape[1]:
         matrix = matrix.T
         transpose = True
-    
+
     W = cans_iteration(
         matrix,
         n=num_iters,

@@ -8,7 +8,7 @@ from omegaconf import DictConfig
 from tensorion.data_transforms import build_split_transform
 
 
-__all__ = ['_load_CIFAR10', '_load_CIFAR100']
+__all__ = ["_load_CIFAR10", "_load_CIFAR100"]
 
 
 def _apply_subset(dataset: Dataset, subset_size: Optional[int]) -> Dataset:

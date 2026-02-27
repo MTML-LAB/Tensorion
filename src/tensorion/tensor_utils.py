@@ -1,5 +1,4 @@
 import torch
-import einops
 import string
 from itertools import combinations
 import numpy as np
@@ -15,15 +14,20 @@ def tucker_reconstruct(core, factors):
     result.shape = (n1, n2, ..., nN)
     """
     n_modes = core.ndim
-    letters = string.ascii_lowercase  # enough for typical N
-    core_idx = letters[:n_modes]      # e.g. 'abc'
-    out_idx  = letters[n_modes:2*n_modes]  # e.g. 'def'
+    letters = string.ascii_lowercase
+    core_idx = letters[:n_modes]  # e.g. 'abc'
+    out_idx = letters[n_modes : 2 * n_modes]  # e.g. 'def'
 
-    eq = core_idx + ',' + ','.join(
-        f'{out_idx[i]}{core_idx[i]}' for i in range(n_modes)
-    ) + '->' + out_idx
+    eq = (
+        core_idx
+        + ","
+        + ",".join(f"{out_idx[i]}{core_idx[i]}" for i in range(n_modes))
+        + "->"
+        + out_idx
+    )
 
-    return einops.einsum(core, *factors, eq, )
+    return torch.einsum(eq, core, *factors)
+
 
 def partitions(n: int):
 
@@ -44,7 +48,7 @@ def invert_permutation(perm: list[int]) -> list[int]:
     for i, p in enumerate(perm):
         inv[p] = i
     return inv
-    
+
 
 def _get_unfold_transpose_order(d: int, mode: int) -> list[int]:
     enum = list(range(d))

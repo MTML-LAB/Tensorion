@@ -80,7 +80,7 @@ class WarmupCosineAnnealingWarmRestarts(torch.optim.lr_scheduler.LRScheduler):
         Returns:
             list[float]: List of learning rates for each parameter group.
         """
-        
+
         T_i = self.T_0
         T_cur = t
         if self.T_mult == 1:

@@ -1,9 +1,8 @@
 import torch
 
-from tensorion import tensor_utils
 from tensorion import projectors
-from tensorion import loggers
 from functools import partial
+
 
 class Tensorion(torch.optim.Optimizer):
     def __init__(
@@ -46,7 +45,7 @@ class Tensorion(torch.optim.Optimizer):
             # Use Tensorion for every parameter in muon_params which is >= min_dim and doesn't look like an embedding or head layer
             assert p.ndim >= min_dim, p.ndim
             self.state[p]["use_muon"] = True
-            
+
         for p in adamw_params:
             # Do not use Muon for parameters in adamw_params
             self.state[p]["use_muon"] = False

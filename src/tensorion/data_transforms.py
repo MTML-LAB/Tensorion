@@ -1,5 +1,4 @@
 from typing import Any
-from hydra.utils import instantiate
 
 
 class ConvertToRGB:

@@ -1,10 +1,7 @@
 import torch
-import einops
 from typing import Union
 from tensorion import tensor_utils
 from tensorion import projectors
-from tensorion import loggers
-from functools import partial
 
 
 class TensorionSTHoSVD(torch.optim.Optimizer):
@@ -32,18 +29,19 @@ class TensorionSTHoSVD(torch.optim.Optimizer):
             wd=wd,
             momentum=momentum,
             nesterov=nesterov,
-            sgd_momentum=sgd_momentum,
             nuclear=nuclear,
             adjust_lr=adjust_lr,
             ranks=ranks,
+            adamw_betas=adamw_betas,
+            adamw_eps=adamw_eps,
             use_cans_svd=use_cans_svd,
             cans_svd_kwargs=cans_svd_kwargs,
         )
 
         muon_params = list(muon_params)
-        sgd_params = list(sgd_params) if sgd_params is not None else []
-        params = muon_params + sgd_params
-        
+        adamw_params = list(adamw_params) if adamw_params is not None else []
+        params = muon_params + adamw_params
+
         super().__init__(params, defaults)
         # Sort parameters into those for which we will use Muon, and those for which we will not
         for p in muon_params:
@@ -51,8 +49,8 @@ class TensorionSTHoSVD(torch.optim.Optimizer):
             assert p.ndim >= min_dim, p.ndim
             self.state[p]["use_muon"] = True
 
-        for p in sgd_params:
-            # Do not use Muon for parameters in sgd_params
+        for p in adamw_params:
+            # Do not use Muon for parameters in adamw_params
             self.state[p]["use_muon"] = False
 
     def adjust_lr_for_muon(self, lr, param_shape):
@@ -78,7 +76,6 @@ class TensorionSTHoSVD(torch.optim.Optimizer):
                 loss = closure()
 
         for group in self.param_groups:
-
             ############################
             #           Muon           #
             ############################
@@ -102,19 +99,22 @@ class TensorionSTHoSVD(torch.optim.Optimizer):
                     continue
 
                 g_core, factors = projectors.st_hosvd_truncation(
-                    g, ranks=ranks, 
-                    use_cans_svd=use_cans_svd, 
-                    cans_svd_kwargs=cans_svd_kwargs
-                    )
-                
+                    g,
+                    ranks=ranks,
+                    use_cans_svd=use_cans_svd,
+                    cans_svd_kwargs=cans_svd_kwargs,
+                )
+
                 # calc update
                 state = self.state[p]
                 if "momentum_buffer" not in state:
-                    state["momentum_buffer"] = [torch.zeros_like(f) for f in [g_core, *factors]]
+                    state["momentum_buffer"] = [
+                        torch.zeros_like(f) for f in [g_core, *factors]
+                    ]
                 buf = state["momentum_buffer"]
                 for f_momentum, f_grad in zip(buf, [g_core, *factors]):
                     f_momentum.mul_(momentum).add_(f_grad)
-                
+
                 if group["nesterov"]:
                     g = []
                     for f_momentum, f_grad in zip(buf, [g_core, *factors]):
@@ -123,20 +123,21 @@ class TensorionSTHoSVD(torch.optim.Optimizer):
                     g = buf
 
                 x_orth = projectors.st_hosvd_projection(
-                    x0=g[0],
-                    ranks=ranks,
+                    x=g[0],
                     use_cans_svd=use_cans_svd,
                     cans_svd_kwargs=cans_svd_kwargs,
                 )["projection"]
 
                 if nuclear:
-                    nuclear = (g[0] * x_orth).sum() # shouldn't we take square root here?
+                    nuclear = (
+                        g[0] * x_orth
+                    ).sum()  # shouldn't we take square root here?
                     x_orth.mul_(nuclear)
 
                 if adjust_lr:
                     # scale update
                     param_shape = p.shape
-                    param_shape = (min(param_shape), g.numel() // min(param_shape))
+                    param_shape = (min(param_shape), p.numel() // min(param_shape))
                     adjusted_lr = self.adjust_lr_for_muon(lr, param_shape)
                 else:
                     adjusted_lr = lr

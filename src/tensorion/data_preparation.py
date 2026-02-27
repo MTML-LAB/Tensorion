@@ -18,11 +18,11 @@ def _set_worker_seed(worker_id):
 def _require_cfg(cfg: DictConfig, key: str, context: str):
     if OmegaConf.is_missing(cfg, key):
         raise ValueError(f"Missing required config key '{key}' in {context}")
-    
+
     value = OmegaConf.select(cfg, key)
     if value is None:
         raise ValueError(f"Missing required config key '{key}' in {context}")
-    
+
     return value
 
 
@@ -42,7 +42,9 @@ def get_datasets(cfg: DictConfig) -> dict[str, Dataset]:
 
     if isinstance(datasets, tuple):
         if len(datasets) != 2:
-            raise ValueError("Dataset loader must return (train, test) or a dict of splits")
+            raise ValueError(
+                "Dataset loader must return (train, test) or a dict of splits"
+            )
         datasets = {"train": datasets[0], "test": datasets[1]}
 
     if not isinstance(datasets, dict):
@@ -55,7 +57,9 @@ def get_datasets(cfg: DictConfig) -> dict[str, Dataset]:
     return datasets
 
 
-def get_dataloader(cfg: DictConfig, dataset: Dataset, split: str = "train") -> DataLoader:
+def get_dataloader(
+    cfg: DictConfig, dataset: Dataset, split: str = "train"
+) -> DataLoader:
     if dataset is None:
         raise ValueError(f"Dataset for split '{split}' is required")
 
@@ -77,14 +81,14 @@ def get_dataloader(cfg: DictConfig, dataset: Dataset, split: str = "train") -> D
         "dataset": dataset,
         "num_workers": num_workers,
         "persistent_workers": persistent_workers,
-        "pin_memory": split_cfg.get("pin_memory", False)
+        "pin_memory": split_cfg.get("pin_memory", False),
     }
-    
+
     if sampler is not None:
         extra_kwargs["sampler"] = sampler
         if "shuffle" in split_cfg:
             extra_kwargs["shuffle"] = False
-    
+
     if split == "train":
         extra_kwargs.setdefault("worker_init_fn", _set_worker_seed)
         generator = _build_generator(cfg)
@@ -94,7 +98,9 @@ def get_dataloader(cfg: DictConfig, dataset: Dataset, split: str = "train") -> D
     return instantiate(split_cfg, **extra_kwargs)
 
 
-def load_from_config(cfg: DictConfig) -> tuple[Dataset, Dataset, DataLoader, DataLoader]:
+def load_from_config(
+    cfg: DictConfig,
+) -> tuple[Dataset, Dataset, DataLoader, DataLoader]:
     datasets = get_datasets(cfg)
     if "train" not in datasets or "test" not in datasets:
         raise ValueError("Both train and test datasets are required")

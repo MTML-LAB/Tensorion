@@ -1,7 +1,5 @@
 import torch
 from torch import nn
-import torch.nn.functional as F
-from torch.utils.data import Dataset, DataLoader
 from torch.optim import Optimizer
 from torch.optim.lr_scheduler import LRScheduler
 
@@ -10,10 +8,8 @@ import random
 import os
 
 from omegaconf import DictConfig, OmegaConf
-import hydra
 from hydra.utils import instantiate
-import re
-from typing import Union, Optional, Literal, Callable, Any
+from typing import Literal, Any
 
 from tensorion.models import resnet, vit
 from tensorion.optimizers import tensorion, tensorion_sgd
@@ -43,23 +39,25 @@ def set_global_seed(seed: int) -> torch.Generator:
     return g
 
 
-def get_optim_and_kwargs(model, optim_name: str, optimizer_kwargs: dict) -> tuple[type[Optimizer], dict[str, Any]]:
-    if optim_name == 'AdamW': 
+def get_optim_and_kwargs(
+    model, optim_name: str, optimizer_kwargs: dict
+) -> tuple[type[Optimizer], dict[str, Any]]:
+    if optim_name == "AdamW":
         optimizer = torch.optim.AdamW
-        kwargs =  {
-            'weight_decay': 5e-3,
-            'betas': (0.9, 0.999),
-            'eps': 1e-8,
+        kwargs = {
+            "weight_decay": 5e-3,
+            "betas": (0.9, 0.999),
+            "eps": 1e-8,
         }
-    elif optim_name == 'SGD': 
+    elif optim_name == "SGD":
         optimizer = torch.optim.SGD
-        kwargs =  {
-            'weight_decay': 5e-3,
-            'momentum': 0.95,
+        kwargs = {
+            "weight_decay": 5e-3,
+            "momentum": 0.95,
         }
-    elif optim_name == 'Tensorion':
+    elif optim_name == "Tensorion":
         optimizer = tensorion.Tensorion
-        min_dim: int = optimizer_kwargs.get('min_dim', 3)
+        min_dim: int = optimizer_kwargs.get("min_dim", 3)
 
         muon_params = []
         adamw_params = []
@@ -71,15 +69,15 @@ def get_optim_and_kwargs(model, optim_name: str, optimizer_kwargs: dict) -> tupl
                 adamw_params.append(param)
 
         kwargs = {
-            'muon_params': muon_params,
-            'adamw_params': adamw_params,
-            'nesterov': False,
-            'momentum': 0.95,
-            'wd': 5e-3,
-            'adamw_betas': (0.9, 0.999),
-            'adamw_eps': 1e-8
+            "muon_params": muon_params,
+            "adamw_params": adamw_params,
+            "nesterov": False,
+            "momentum": 0.95,
+            "wd": 5e-3,
+            "adamw_betas": (0.9, 0.999),
+            "adamw_eps": 1e-8,
         }
-    elif optim_name == 'TensorionSGD':
+    elif optim_name == "TensorionSGD":
         optimizer = tensorion_sgd.TensorionSGD
 
         muon_params = []
@@ -92,28 +90,30 @@ def get_optim_and_kwargs(model, optim_name: str, optimizer_kwargs: dict) -> tupl
                 sgd_params.append(param)
 
         kwargs = {
-            'muon_params': muon_params,
-            'sgd_params': sgd_params,
-            'nesterov': False,
-            'momentum': 0.95,
-            'wd': 5e-3,
-            'sgd_momentum': 0.95,
+            "muon_params": muon_params,
+            "sgd_params": sgd_params,
+            "nesterov": False,
+            "momentum": 0.95,
+            "wd": 5e-3,
+            "sgd_momentum": 0.95,
         }
     else:
         raise ValueError("Incorrect optimizer name")
-    
+
     kwargs.update(optimizer_kwargs)
     return optimizer, kwargs
 
 
-def get_scheduler_and_kwargs(scheduler_name: str, scheduler_kwargs: dict) -> tuple[type[LRScheduler], dict[str, Any]]:
+def get_scheduler_and_kwargs(
+    scheduler_name: str, scheduler_kwargs: dict
+) -> tuple[type[LRScheduler], dict[str, Any]]:
     schedulers = {
-        'CosineAnnealingWarmRestarts': torch.optim.lr_scheduler.CosineAnnealingWarmRestarts,
-        'WarmupCosineAnnealingWarmRestarts': WarmupCosineAnnealingWarmRestarts.WarmupCosineAnnealingWarmRestarts,
-        'CosineAnnealingLR': torch.optim.lr_scheduler.CosineAnnealingLR,
-        'ExponentialLR': torch.optim.lr_scheduler.ExponentialLR,
-        'StepLR': torch.optim.lr_scheduler.StepLR,
-        'MultiStepLR': torch.optim.lr_scheduler.MultiStepLR,
+        "CosineAnnealingWarmRestarts": torch.optim.lr_scheduler.CosineAnnealingWarmRestarts,
+        "WarmupCosineAnnealingWarmRestarts": WarmupCosineAnnealingWarmRestarts.WarmupCosineAnnealingWarmRestarts,
+        "CosineAnnealingLR": torch.optim.lr_scheduler.CosineAnnealingLR,
+        "ExponentialLR": torch.optim.lr_scheduler.ExponentialLR,
+        "StepLR": torch.optim.lr_scheduler.StepLR,
+        "MultiStepLR": torch.optim.lr_scheduler.MultiStepLR,
     }
 
     if scheduler_name in schedulers:
@@ -126,43 +126,49 @@ def get_scheduler_and_kwargs(scheduler_name: str, scheduler_kwargs: dict) -> tup
     return scheduler, kwargs
 
 
-def load_model(model_name: Literal['ResNet18', 'ResNet34', 'VIT'], num_classes: int, device) -> nn.Module:
-    if model_name == 'ResNet18':
+def load_model(
+    model_name: Literal["ResNet18", "ResNet34", "VIT"], num_classes: int, device
+) -> nn.Module:
+    if model_name == "ResNet18":
         model = resnet.ResNet18(num_classes=num_classes)
-    elif model_name == 'ResNet34':
+    elif model_name == "ResNet34":
         model = resnet.ResNet34(num_classes=num_classes)
-    elif model_name == 'VIT':
+    elif model_name == "VIT":
         model = vit.VIT_0(num_classes=num_classes)
     else:
         raise ValueError(f"Unknown model name: {model_name}")
-    
+
     model.to(device)
     return model
 
 
 def load_optim_from_config(cfg: DictConfig, model: nn.Module) -> Optimizer:
-    optimizer_cfg = cfg.get('optimizer', {})
-    optimizer_name = optimizer_cfg['optimizer_name']
+    optimizer_cfg = cfg.get("optimizer", {})
+    optimizer_name = optimizer_cfg["optimizer_name"]
 
     optimizer_kwargs = dict(optimizer_cfg)
-    del optimizer_kwargs['optimizer_name']
+    del optimizer_kwargs["optimizer_name"]
     print(f"{optimizer_kwargs=}")
 
-    optimizer_cls, optimizer_kwargs = get_optim_and_kwargs(model, optim_name=optimizer_name, optimizer_kwargs=optimizer_kwargs)
+    optimizer_cls, optimizer_kwargs = get_optim_and_kwargs(
+        model, optim_name=optimizer_name, optimizer_kwargs=optimizer_kwargs
+    )
     optimizer = optimizer_cls(model.parameters(), **optimizer_kwargs)
 
     return optimizer
 
 
 def load_scheduler_from_config(cfg: DictConfig, optimizer: Optimizer):
-    scheduler_cfg = cfg.get('scheduler', {})
-    scheduler_name = scheduler_cfg['scheduler_name']
-    
+    scheduler_cfg = cfg.get("scheduler", {})
+    scheduler_name = scheduler_cfg["scheduler_name"]
+
     scheduler_kwargs = dict(scheduler_cfg)
-    del scheduler_kwargs['scheduler_name']
+    del scheduler_kwargs["scheduler_name"]
     print(f"{scheduler_kwargs=}")
 
-    scheduler_cls, scheduler_kwargs = get_scheduler_and_kwargs(scheduler_name, scheduler_kwargs=scheduler_kwargs)
+    scheduler_cls, scheduler_kwargs = get_scheduler_and_kwargs(
+        scheduler_name, scheduler_kwargs=scheduler_kwargs
+    )
     scheduler = scheduler_cls(optimizer, **scheduler_kwargs)
 
     return scheduler
@@ -193,7 +199,9 @@ def run(cfg: DictConfig):
     set_global_seed(cfg.seed)
 
     model = instantiate(cfg.model).to(device)
-    train_ds, test_ds, train_loader, test_loader = data_preparation.load_from_config(cfg)
+    train_ds, test_ds, train_loader, test_loader = data_preparation.load_from_config(
+        cfg
+    )
     optimizer = instantiate(cfg.optimizer, params=model.parameters())
 
     scheduler_kwargs = {"optimizer": optimizer}
@@ -201,11 +209,11 @@ def run(cfg: DictConfig):
         scheduler_kwargs["steps_per_epoch"] = len(train_loader)
 
     scheduler = instantiate(cfg.scheduler.scheduler_kwargs, **scheduler_kwargs)
-    
-    scheduler_step = cfg.scheduler.get('scheduler_step', 'epoch')
 
-    save_path = cfg.save_dir + '/checkpoints/'
-    save_steps = cfg.get('save_steps', -1)
+    scheduler_step = cfg.scheduler.get("scheduler_step", "epoch")
+
+    save_path = cfg.save_dir + "/checkpoints/"
+    save_steps = cfg.get("save_steps", -1)
 
     criterion = instantiate(cfg.criterion)
 

@@ -4,7 +4,7 @@ from omegaconf import DictConfig
 from tensorion.data_transforms import build_split_transform
 
 
-__all__ = ['_load_food101']
+__all__ = ["_load_food101"]
 
 
 def _load_food101(

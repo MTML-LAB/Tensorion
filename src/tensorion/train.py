@@ -1,16 +1,15 @@
 import time
 import torch
 from torch import nn
-import torch.nn.functional as F
-from torch.utils.data import Dataset, DataLoader
+from torch.utils.data import DataLoader
 
-from omegaconf import OmegaConf
 import os
 from tensorion.loggers import RandomGradLogger
-from typing import Union, Optional, Literal, Callable, Any
+from typing import Optional, Literal, Callable, Any
 import pathlib
 
 from tensorion.experiment_logger import ExperimentLogger
+
 
 @torch.no_grad()
 def save_checkpoint(
@@ -78,20 +77,21 @@ def test(
 
 
 def train_epoch(
-        model: nn.Module, 
-        optimizer: torch.optim.Optimizer, 
-        scheduler, train_loader: DataLoader, 
-        loss_fn: Callable[[torch.Tensor, torch.Tensor], torch.Tensor], 
-        device: str,
-        verbose_iters: int = -1,
-        epoch: int=0,
-        scheduler_step: Literal['step', 'epoch'] = 'epoch',
-        log_grads: bool = False,
-    ) -> tuple[float, int, float]:
+    model: nn.Module,
+    optimizer: torch.optim.Optimizer,
+    scheduler,
+    train_loader: DataLoader,
+    loss_fn: Callable[[torch.Tensor, torch.Tensor], torch.Tensor],
+    device: str,
+    verbose_iters: int = -1,
+    epoch: int = 0,
+    scheduler_step: Literal["step", "epoch"] = "epoch",
+    log_grads: bool = False,
+) -> tuple[float, int, float]:
     """
     :return: epoch loss(float), num samples(int), elapsed time(float)
     """
-    
+
     model.train()
     epoch_loss = torch.zeros((1,), device=device)
     num_samples = 0
@@ -115,9 +115,9 @@ def train_epoch(
             logger.sample_log(global_step)
 
         optimizer.step()
-        if scheduler_step == 'step':
+        if scheduler_step == "step":
             scheduler.step()
-        
+
         epoch_loss = epoch_loss + loss.detach() * bs
         num_samples += bs
         global_step += 1
@@ -128,31 +128,32 @@ def train_epoch(
 
             print(f"{batch_idx:4}/{num_batches:4}:\tloss{curr_loss:.5f}", flush=True)
 
-    if scheduler_step == 'epoch':
+    if scheduler_step == "epoch":
         scheduler.step()
     epoch_loss = epoch_loss.item() / num_samples
 
     if logger is not None:
         os.makedirs("sample_data", exist_ok=True)
         logger.save_logs(path=f"sample_data/gradients_from_{epoch}.pt")
-    
+
     elapsed = time.perf_counter() - start_time
     return epoch_loss, num_samples, elapsed
 
 
 def train_loop(
-        model, 
-        train_loader, test_loader, 
-        optimizer, 
-        scheduler, 
-        criterion, 
-        device, 
-        num_epochs, 
-        scheduler_step: Literal['step', 'epoch'] = 'epoch', 
-        save_steps: int = -1, 
-        save_path: Optional[str] = None,
-        experiment_logger: Optional[ExperimentLogger] = None
-    ):
+    model,
+    train_loader,
+    test_loader,
+    optimizer,
+    scheduler,
+    criterion,
+    device,
+    num_epochs,
+    scheduler_step: Literal["step", "epoch"] = "epoch",
+    save_steps: int = -1,
+    save_path: Optional[str] = None,
+    experiment_logger: Optional[ExperimentLogger] = None,
+):
 
     train_losses = []
     test_losses = []
@@ -171,7 +172,7 @@ def train_loop(
         f"Epoch {0:2} ||  Accuracy = {acc:.4f} || test_loss = {test_loss:.6f} || lr = {lr}",
         flush=True,
     )
-    
+
     if experiment_logger is not None:
         experiment_logger.log_metrics(
             {

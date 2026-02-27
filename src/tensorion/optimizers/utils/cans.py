@@ -46,7 +46,9 @@ def remez(A, B, degree):
         try:
             p, NewExt, e, newe = remez_step(Ext)
         except np.linalg.LinAlgError:
-            return kovarik_formula(degree), 0  # if the segment converged to [A, B]=[1, 1]
+            return kovarik_formula(
+                degree
+            ), 0  # if the segment converged to [A, B]=[1, 1]
         if newe < abs(e) + 1e-20:
             return p, newe
         Ext = np.array(NewExt, dtype=np.float64)
@@ -71,19 +73,20 @@ def kovarik_formula(degree):
     for i in range(1, (degree + 1) // 2):
         for j in range(2 * (i - 1) + 1, 2 * i + 1):
             a *= j / 2
-        a /= i ** 2
+        a /= i**2
         sign = 1
         for k in range(0, i + 1):
             p[2 * k + 1] += a * sign * c_n_k(i, k)
             sign *= -1
     return np.poly1d(p[::-1])
 
+
 def explicit3(A, B):
     # explicit formula for optimal 3-rd per polynomial on the segment [A, B]
-    e = np.sqrt((A ** 2 + A * B + B ** 2) / 3)
-    a = 2 / (2 * e ** 3 + A ** 2 * B + B ** 2 * A)
-    p = np.poly1d([-a, 0, a * (A ** 2 + A * B + B ** 2), 0])
-    err = (2 * e ** 3 - A ** 2 * B - B ** 2 * A) / (2 * e ** 3 + A ** 2 * B + B ** 2 * A)
+    e = np.sqrt((A**2 + A * B + B**2) / 3)
+    a = 2 / (2 * e**3 + A**2 * B + B**2 * A)
+    p = np.poly1d([-a, 0, a * (A**2 + A * B + B**2), 0])
+    err = (2 * e**3 - A**2 * B - B**2 * A) / (2 * e**3 + A**2 * B + B**2 * A)
     return p, err
 
 
@@ -127,7 +130,9 @@ def delta_orthogonalization(n=1, degree=3, delta=0.3, B=1):
     return lst, (Al + Ar) / 2
 
 
-def cans_iteration(A, n, a, degree=3, preprocess=False, preprocess_iters=4, delta=0.99, **kwargs):
+def cans_iteration(
+    A, n, a, degree=3, preprocess=False, preprocess_iters=4, delta=0.99, **kwargs
+):
     A = A.clone()
     # CANS iteration for orthogonalization
     # a is the left boundary of the segment
@@ -138,22 +143,21 @@ def cans_iteration(A, n, a, degree=3, preprocess=False, preprocess_iters=4, delt
     if degree == 3:
         A2 = A.T @ A
         A3 = A @ A2
-        denom = torch.norm(A3, p='fro') ** (1/3) + 1e-7
+        denom = torch.norm(A3, p="fro") ** (1 / 3) + 1e-7
 
-        A2 /= denom ** 2
-        A3 /= denom ** 3
+        A2 /= denom**2
+        A3 /= denom**3
     elif degree == 5:
         A2 = A.T @ A
         A3 = A @ A2
         A5 = A3 @ A2
-        denom = torch.norm(A5, p='fro') ** (1/5) + 1e-7
-        A2 /= denom ** 2
-        A3 /= denom ** 3
-        A5 /= denom ** 5
+        denom = torch.norm(A5, p="fro") ** (1 / 5) + 1e-7
+        A2 /= denom**2
+        A3 /= denom**3
+        A5 /= denom**5
     else:
         raise NotImplementedError("Only degrees 3 and 5 are implemented")
     A = A / denom
-
 
     b = 1  # assume that matrix is normalized
     I = torch.eye(A.shape[1], device=A.device, dtype=A.dtype)
@@ -171,7 +175,7 @@ def cans_iteration(A, n, a, degree=3, preprocess=False, preprocess_iters=4, delt
                 A5 = A3 @ A2
         a, b = 1 - delta, 1 + delta
     cnt = 0
-    err = torch.norm(A2 - I) / torch.norm(I, p='fro')
+    err = torch.norm(A2 - I) / torch.norm(I, p="fro")
     while cnt < n and (err > 1e-6):
         if cnt > 0:
             A3 = A @ A2
@@ -187,6 +191,6 @@ def cans_iteration(A, n, a, degree=3, preprocess=False, preprocess_iters=4, delt
             A = p[1] * A + p[3] * A3 + p[5] * A5
             b *= 1.01  # for numerical stability
         A2 = A.T @ A
-        err = torch.norm(A2 - I) / torch.norm(I, p='fro')
+        err = torch.norm(A2 - I) / torch.norm(I, p="fro")
         cnt += 1
     return A
