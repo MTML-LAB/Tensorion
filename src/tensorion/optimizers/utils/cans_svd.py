@@ -29,8 +29,6 @@ def cans_svd(
         S: torch.Tensor: Singular values.
         Vt: torch.Tensor: Right singular vectors (transposed).
     """
-    device = matrix.device
-    dtype = matrix.dtype
 
     transpose = False
     if matrix.shape[0] < matrix.shape[1]:

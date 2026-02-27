@@ -65,10 +65,10 @@ def project_ns(x: Tensor, idx: int, num_ns_iterations: int = 2):
     # m x n, m <= n
     X /= torch.linalg.norm(X, ord=2)  # TODO: speedup
     m = X.shape[0]
-    I = torch.eye(m, device=X.device, dtype=X.dtype)
+    eye = torch.eye(m, device=X.device, dtype=X.dtype)
 
     for _ in range(num_ns_iterations):
-        X = (3 * I - X @ X.T) @ (X / 2)  # TODO: speedup
+        X = (3 * eye - X @ X.T) @ (X / 2)  # TODO: speedup
 
     if transpose:
         X.transpose_(0, 1)

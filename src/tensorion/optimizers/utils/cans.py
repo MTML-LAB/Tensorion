@@ -160,7 +160,7 @@ def cans_iteration(
     A = A / denom
 
     b = 1  # assume that matrix is normalized
-    I = torch.eye(A.shape[1], device=A.device, dtype=A.dtype)
+    eye = torch.eye(A.shape[1], device=A.device, dtype=A.dtype)
     e = 10
     if preprocess:
         lst, _ = delta_orthogonalization(preprocess_iters, degree, delta)
@@ -175,7 +175,7 @@ def cans_iteration(
                 A5 = A3 @ A2
         a, b = 1 - delta, 1 + delta
     cnt = 0
-    err = torch.norm(A2 - I) / torch.norm(I, p="fro")
+    err = torch.norm(A2 - eye) / torch.norm(eye, p="fro")
     while cnt < n and (err > 1e-6):
         if cnt > 0:
             A3 = A @ A2
@@ -191,6 +191,6 @@ def cans_iteration(
             A = p[1] * A + p[3] * A3 + p[5] * A5
             b *= 1.01  # for numerical stability
         A2 = A.T @ A
-        err = torch.norm(A2 - I) / torch.norm(I, p="fro")
+        err = torch.norm(A2 - eye) / torch.norm(eye, p="fro")
         cnt += 1
     return A

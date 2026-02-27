@@ -37,7 +37,7 @@ def partitions(n: int):
     yield from (
         [list((0, *c)), list(items - set(c))]
         for r in range(n)
-        if (rest := n - 1 - r) > 0
+        if (n - 1 - r) > 0
         for c in combinations(items, r)
     )
 

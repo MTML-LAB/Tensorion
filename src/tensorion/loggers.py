@@ -107,7 +107,7 @@ class RandomGradLogger:
     @torch.no_grad()
     def sample_log(self, global_step: int = 0):
         for name, param in self.model.named_parameters():
-            if (param.requires_grad == False) or (param.grad is None):
+            if (not param.requires_grad) or (param.grad is None):
                 continue
 
             if torch.rand((), generator=self.g).item() >= self.log_proba:
