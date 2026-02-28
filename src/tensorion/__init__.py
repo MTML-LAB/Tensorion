@@ -3,14 +3,14 @@ from tensorion import optimizers
 from tensorion.optimizers import (
     Tensorion,
     TensorionSGD,
-    TensorionSTHoSVD,
-    TensorionSTHoSVDSGD,
+    STHoSVDTensorion,
+    STHoSVDTensorionSGD,
 )
 
 __all__ = [
     "optimizers",
     "Tensorion",
     "TensorionSGD",
-    "TensorionSTHoSVD",
-    "TensorionSTHoSVDSGD",
+    "STHoSVDTensorion",
+    "STHoSVDTensorionSGD",
 ]

@@ -1,18 +1,18 @@
 """
-Basic sanity checks for TensorionSTHoSVD and TensorionSTHoSVDSGD optimizers.
+Basic sanity checks for STHoSVDTensorion and STHoSVDTensorionSGD optimizers.
 """
 import torch
 import pytest
-from tensorion.optimizers import TensorionSTHoSVD, TensorionSTHoSVDSGD
+from tensorion.optimizers import STHoSVDTensorion, STHoSVDTensorionSGD
 
 
 def test_tensorion_st_hosvd_basic_step():
-    """Test that TensorionSTHoSVD can perform a basic optimization step."""
+    """Test that STHoSVDTensorion can perform a basic optimization step."""
     # Create a simple 3D tensor parameter
     param = torch.randn(8, 10, 12, requires_grad=True)
     
     # Create optimizer
-    optimizer = TensorionSTHoSVD(
+    optimizer = STHoSVDTensorion(
         params=[param],
         muon_params=[param],
         lr=1e-2,
@@ -40,12 +40,12 @@ def test_tensorion_st_hosvd_basic_step():
 
 
 def test_tensorion_st_hosvd_sgd_basic_step():
-    """Test that TensorionSTHoSVDSGD can perform a basic optimization step."""
+    """Test that STHoSVDTensorionSGD can perform a basic optimization step."""
     # Create a simple 3D tensor parameter
     param = torch.randn(8, 10, 12, requires_grad=True)
     
     # Create optimizer
-    optimizer = TensorionSTHoSVDSGD(
+    optimizer = STHoSVDTensorionSGD(
         params=[param],
         muon_params=[param],
         lr=1e-2,
@@ -75,7 +75,7 @@ def test_tensorion_st_hosvd_loss_decreases():
     target = torch.randn(6, 8, 10)
     param = torch.zeros_like(target, requires_grad=True)
     
-    optimizer = TensorionSTHoSVD(
+    optimizer = STHoSVDTensorion(
         params=[param],
         muon_params=[param],
         lr=0.1,
@@ -99,11 +99,11 @@ def test_tensorion_st_hosvd_loss_decreases():
 
 
 def test_tensorion_st_hosvd_sgd_loss_decreases():
-    """Test that loss decreases over multiple steps for TensorionSTHoSVDSGD."""
+    """Test that loss decreases over multiple steps for STHoSVDTensorionSGD."""
     target = torch.randn(6, 8, 10)
     param = torch.zeros_like(target, requires_grad=True)
     
-    optimizer = TensorionSTHoSVDSGD(
+    optimizer = STHoSVDTensorionSGD(
         params=[param],
         muon_params=[param],
         lr=0.1,
@@ -125,14 +125,14 @@ def test_tensorion_st_hosvd_sgd_loss_decreases():
 
 
 def test_tensorion_st_hosvd_with_adamw_backup():
-    """Test TensorionSTHoSVD with both muon_params and adamw_params."""
+    """Test STHoSVDTensorion with both muon_params and adamw_params."""
     # Muon parameter (3D tensor)
     muon_param = torch.randn(8, 10, 12, requires_grad=True)
     
     # AdamW parameter (2D tensor, not eligible for muon)
     adamw_param = torch.randn(20, 30, requires_grad=True)
     
-    optimizer = TensorionSTHoSVD(
+    optimizer = STHoSVDTensorion(
         params=[muon_param, adamw_param],
         muon_params=[muon_param],
         adamw_params=[adamw_param],
@@ -157,11 +157,11 @@ def test_tensorion_st_hosvd_with_adamw_backup():
 
 
 def test_tensorion_st_hosvd_sgd_with_sgd_backup():
-    """Test TensorionSTHoSVDSGD with both muon_params and sgd_params."""
+    """Test STHoSVDTensorionSGD with both muon_params and sgd_params."""
     muon_param = torch.randn(8, 10, 12, requires_grad=True)
     sgd_param = torch.randn(20, 30, requires_grad=True)
     
-    optimizer = TensorionSTHoSVDSGD(
+    optimizer = STHoSVDTensorionSGD(
         params=[muon_param, sgd_param],
         muon_params=[muon_param],
         sgd_params=[sgd_param],
@@ -187,7 +187,7 @@ def test_tensorion_st_hosvd_momentum():
     """Test that momentum is working correctly."""
     param = torch.randn(6, 8, 10, requires_grad=True)
     
-    optimizer = TensorionSTHoSVD(
+    optimizer = STHoSVDTensorion(
         params=[param],
         muon_params=[param],
         lr=0.1,
@@ -219,7 +219,7 @@ def test_tensorion_st_hosvd_nesterov():
     """Test Nesterov momentum option."""
     param = torch.randn(6, 8, 10, requires_grad=True)
     
-    optimizer = TensorionSTHoSVD(
+    optimizer = STHoSVDTensorion(
         params=[param],
         muon_params=[param],
         lr=0.1,

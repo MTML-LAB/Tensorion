@@ -2,8 +2,8 @@
 Comprehensive comparison of all Tensorion optimizers:
 - Tensorion (default, uses spectral sphere projection)
 - TensorionSGD (uses spectral sphere projection with SGD backup)
-- TensorionSTHoSVD (uses ST-HOSVD truncation with Tucker decomposition)
-- TensorionSTHoSVDSGD (uses ST-HOSVD truncation with SGD backup)
+- STHoSVDTensorion (uses ST-HOSVD truncation with Tucker decomposition)
+- STHoSVDTensorionSGD (uses ST-HOSVD truncation with SGD backup)
 """
 import torch
 import numpy as np
@@ -11,8 +11,8 @@ import matplotlib.pyplot as plt
 from tensorion.optimizers import (
     Tensorion, 
     TensorionSGD, 
-    TensorionSTHoSVD, 
-    TensorionSTHoSVDSGD
+    STHoSVDTensorion, 
+    STHoSVDTensorionSGD
 )
 from tensorion.tensor_utils import tucker_reconstruct
 
@@ -106,8 +106,8 @@ def run_comparison():
                 'min_dim': 3,
             }
         },
-        'TensorionSTHoSVD': {
-            'class': TensorionSTHoSVD,
+        'STHoSVDTensorion': {
+            'class': STHoSVDTensorion,
             'kwargs': {
                 'lr': base_lr,
                 'wd': 0.0,
@@ -119,8 +119,8 @@ def run_comparison():
                 'min_dim': 3,
             }
         },
-        'TensorionSTHoSVDSGD': {
-            'class': TensorionSTHoSVDSGD,
+        'STHoSVDTensorionSGD': {
+            'class': STHoSVDTensorionSGD,
             'kwargs': {
                 'lr': base_lr,
                 'wd': 0.0,
@@ -293,8 +293,8 @@ def compare_on_different_shapes():
         optimizers = {
             'Tensorion': (Tensorion, {'lr': base_lr, 'wd': 0.0, 'momentum': 0.9, 'adjust_lr': False, 'min_dim': 3}),
             'TensorionSGD': (TensorionSGD, {'lr': base_lr, 'wd': 0.0, 'momentum': 0.9, 'adjust_lr': False, 'min_dim': 3}),
-            'TensorionSTHoSVD': (TensorionSTHoSVD, {'lr': base_lr, 'wd': 0.0, 'ranks': rank, 'momentum': 0.9, 'adjust_lr': False, 'min_dim': 3}),
-            'TensorionSTHoSVDSGD': (TensorionSTHoSVDSGD, {'lr': base_lr, 'wd': 0.0, 'ranks': rank, 'momentum': 0.9, 'adjust_lr': False, 'min_dim': 3}),
+            'STHoSVDTensorion': (STHoSVDTensorion, {'lr': base_lr, 'wd': 0.0, 'ranks': rank, 'momentum': 0.9, 'adjust_lr': False, 'min_dim': 3}),
+            'STHoSVDTensorionSGD': (STHoSVDTensorionSGD, {'lr': base_lr, 'wd': 0.0, 'ranks': rank, 'momentum': 0.9, 'adjust_lr': False, 'min_dim': 3}),
         }
         
         for name, (opt_class, kwargs) in optimizers.items():

@@ -4,7 +4,7 @@ from tensorion import tensor_utils
 from tensorion import projectors
 
 
-class TensorionSTHoSVD(torch.optim.Optimizer):
+class STHoSVDTensorion(torch.optim.Optimizer):
     def __init__(
         self,
         params,
@@ -38,19 +38,42 @@ class TensorionSTHoSVD(torch.optim.Optimizer):
             cans_svd_kwargs=cans_svd_kwargs,
         )
 
-        muon_params = list(muon_params)
+        # Convert params to list and ensure it's iterable
+        params = list(params)
+        muon_params = list(muon_params) if muon_params is not None else []
         adamw_params = list(adamw_params) if adamw_params is not None else []
-        params = muon_params + adamw_params
+        
+        # Validate that muon_params and adamw_params are subsets of params
+        muon_set = set(muon_params)
+        adamw_set = set(adamw_params)
+        params_set = set(params)
+        
+        if muon_set - params_set:
+            raise ValueError(f"muon_params contains parameters not in params: {muon_set - params_set}")
+        if adamw_set - params_set:
+            raise ValueError(f"adamw_params contains parameters not in params: {adamw_set - params_set}")
+        if muon_set & adamw_set:
+            raise ValueError(f"Parameters cannot be in both muon_params and adamw_params: {muon_set & adamw_set}")
 
         super().__init__(params, defaults)
-        # Sort parameters into those for which we will use Muon, and those for which we will not
-        for p in muon_params:
-            # Use Tensorion for every parameter in muon_params which is >= min_dim and doesn't look like an embedding or head layer
-            assert p.ndim >= min_dim, p.ndim
-            self.state[p]["use_muon"] = True
-
+        
+        # Mark parameters for processing
+        # If muon_params is specified, only those get muon processing
+        # Otherwise, auto-detect based on criteria (ndim >= min_dim)
+        if muon_params:
+            for p in muon_params:
+                assert p.ndim >= min_dim, f"Parameter in muon_params must have ndim >= {min_dim}, got {p.ndim}"
+                self.state[p]["use_muon"] = True
+        else:
+            # Auto-detect: use muon for all params with ndim >= min_dim
+            for p in params:
+                if p.ndim >= min_dim:
+                    self.state[p]["use_muon"] = True
+                else:
+                    self.state[p]["use_muon"] = False
+        
+        # Mark adamw_params explicitly (they override auto-detection)
         for p in adamw_params:
-            # Do not use Muon for parameters in adamw_params
             self.state[p]["use_muon"] = False
 
     def adjust_lr_for_muon(self, lr, param_shape):
@@ -80,7 +103,7 @@ class TensorionSTHoSVD(torch.optim.Optimizer):
             #           Muon           #
             ############################
 
-            params = [p for p in group["params"] if self.state[p]["use_muon"]]
+            params = [p for p in group["params"] if self.state[p].get("use_muon", False)]
             # import pdb; pdb.set_trace()
             lr = group["lr"]
             wd = group["wd"]
@@ -153,7 +176,7 @@ class TensorionSTHoSVD(torch.optim.Optimizer):
             #       AdamW backup       #
             ############################
 
-            params = [p for p in group["params"] if not self.state[p]["use_muon"]]
+            params = [p for p in group["params"] if not self.state[p].get("use_muon", False)]
             lr = group["lr"]
             beta1, beta2 = group["adamw_betas"]
             eps = group["adamw_eps"]

@@ -1,10 +1,10 @@
 """
-Visualize tensor optimization progress with TensorionSTHoSVD.
+Visualize tensor optimization progress with STHoSVDTensorion.
 """
 import torch
 import matplotlib.pyplot as plt
 import numpy as np
-from tensorion.optimizers import TensorionSTHoSVD, TensorionSTHoSVDSGD
+from tensorion.optimizers import STHoSVDTensorion, STHoSVDTensorionSGD
 from tensorion.tensor_utils import tucker_reconstruct
 
 
@@ -64,7 +64,7 @@ def main():
     
     # Test different optimizers
     optimizers = {
-        'TensorionSTHoSVD': (TensorionSTHoSVD, {
+        'STHoSVDTensorion': (STHoSVDTensorion, {
             'lr': 0.01,
             'wd': 0.0,
             'ranks': true_rank,
@@ -72,7 +72,7 @@ def main():
             'adjust_lr': False,
             'min_dim': 3,
         }),
-        'TensorionSTHoSVDSGD': (TensorionSTHoSVDSGD, {
+        'STHoSVDTensorionSGD': (STHoSVDTensorionSGD, {
             'lr': 0.01,
             'wd': 0.0,
             'ranks': true_rank,

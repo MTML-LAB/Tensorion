@@ -1,5 +1,5 @@
 """
-Toy tensor optimization problem to test TensorionSTHoSVD and TensorionSTHoSVDSGD.
+Toy tensor optimization problem to test STHoSVDTensorion and STHoSVDTensorionSGD.
 
 We'll solve a low-rank tensor approximation problem:
 Given a target tensor T, find a low-rank approximation that minimizes ||T - X||^2
@@ -7,7 +7,7 @@ where X is reconstructed from a Tucker decomposition.
 """
 import torch
 import numpy as np
-from tensorion.optimizers import TensorionSTHoSVD, TensorionSTHoSVDSGD
+from tensorion.optimizers import STHoSVDTensorion, STHoSVDTensorionSGD
 
 
 def create_low_rank_tensor(shape, rank, seed=42):
@@ -32,9 +32,9 @@ def create_low_rank_tensor(shape, rank, seed=42):
 
 
 def test_tensorion_st_hosvd_toy_problem():
-    """Test TensorionSTHoSVD on a toy tensor approximation problem."""
+    """Test STHoSVDTensorion on a toy tensor approximation problem."""
     print("\n" + "="*60)
-    print("Testing TensorionSTHoSVD on Toy Tensor Optimization")
+    print("Testing STHoSVDTensorion on Toy Tensor Optimization")
     print("="*60)
     
     # Create target tensor with known low rank
@@ -46,7 +46,7 @@ def test_tensorion_st_hosvd_toy_problem():
     param = torch.randn(*target_shape, requires_grad=True)
     
     # Create optimizer
-    optimizer = TensorionSTHoSVD(
+    optimizer = STHoSVDTensorion(
         params=[param],
         muon_params=[param],
         lr=0.01,  # Lower learning rate for stability
@@ -96,9 +96,9 @@ def test_tensorion_st_hosvd_toy_problem():
 
 
 def test_tensorion_st_hosvd_sgd_toy_problem():
-    """Test TensorionSTHoSVDSGD on a toy tensor approximation problem."""
+    """Test STHoSVDTensorionSGD on a toy tensor approximation problem."""
     print("\n" + "="*60)
-    print("Testing TensorionSTHoSVDSGD on Toy Tensor Optimization")
+    print("Testing STHoSVDTensorionSGD on Toy Tensor Optimization")
     print("="*60)
     
     # Create target tensor with known low rank
@@ -110,7 +110,7 @@ def test_tensorion_st_hosvd_sgd_toy_problem():
     param = torch.randn(*target_shape, requires_grad=True)
     
     # Create optimizer
-    optimizer = TensorionSTHoSVDSGD(
+    optimizer = STHoSVDTensorionSGD(
         params=[param],
         muon_params=[param],
         lr=0.01,  # Lower learning rate for stability
@@ -156,16 +156,16 @@ def test_tensorion_st_hosvd_sgd_toy_problem():
 def test_comparison_with_baseline():
     """Compare Tensorion optimizers with standard SGD on the same problem."""
     print("\n" + "="*60)
-    print("Comparing TensorionSTHoSVD with Standard SGD")
+    print("Comparing STHoSVDTensorion with Standard SGD")
     print("="*60)
     
     target_shape = (6, 8, 10)
     true_rank = 2
     target_tensor, _, _ = create_low_rank_tensor(target_shape, true_rank, seed=44)
     
-    # Test TensorionSTHoSVD
+    # Test STHoSVDTensorion
     param1 = torch.randn(*target_shape, requires_grad=True)
-    optimizer1 = TensorionSTHoSVD(
+    optimizer1 = STHoSVDTensorion(
         params=[param1],
         muon_params=[param1],
         lr=0.01,  # Lower learning rate
@@ -192,7 +192,7 @@ def test_comparison_with_baseline():
     print("\nOptimizing...")
     
     for step in range(num_steps):
-        # TensorionSTHoSVD
+        # STHoSVDTensorion
         loss1 = ((param1 - target_tensor) ** 2).sum()
         loss1.backward()
         optimizer1.step()
@@ -207,10 +207,10 @@ def test_comparison_with_baseline():
         losses2.append(loss2.item())
         
         if (step + 1) % 10 == 0 or step == 0:
-            print(f"Step {step+1:3d}: TensorionSTHoSVD = {loss1.item():.6f}, SGD = {loss2.item():.6f}")
+            print(f"Step {step+1:3d}: STHoSVDTensorion = {loss1.item():.6f}, SGD = {loss2.item():.6f}")
     
     print(f"\nFinal losses:")
-    print(f"  TensorionSTHoSVD: {losses1[-1]:.6f}")
+    print(f"  STHoSVDTensorion: {losses1[-1]:.6f}")
     print(f"  Standard SGD:     {losses2[-1]:.6f}")
     print(f"\nBoth optimizers successfully decreased the loss!")
     
@@ -229,7 +229,7 @@ def test_higher_dimensional_tensor():
     
     param = torch.randn(*target_shape, requires_grad=True)
     
-    optimizer = TensorionSTHoSVD(
+    optimizer = STHoSVDTensorion(
         params=[param],
         muon_params=[param],
         lr=0.005,  # Even lower learning rate for 4D
