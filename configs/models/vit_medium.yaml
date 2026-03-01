@@ -1,0 +1,4 @@
+_target_: tensorion.models.vit.create_timm_model
+model_name: vit_medium_patch16_reg4_gap_256.sbb_in12k_ft_in1k
+num_classes: ${dataset.num_classes}
+pretrained: true

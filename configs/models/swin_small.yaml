@@ -1,0 +1,4 @@
+_target_: tensorion.models.vit.create_timm_model
+model_name: swin_small_patch4_window7_224.ms_in22k
+num_classes: ${dataset.num_classes}
+pretrained: true

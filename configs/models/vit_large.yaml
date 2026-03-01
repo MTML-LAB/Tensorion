@@ -1,0 +1,4 @@
+_target_: tensorion.models.vit.create_timm_model
+model_name: vit_large_patch16_rope_mixed_ape_224.naver_in1k
+num_classes: ${dataset.num_classes}
+pretrained: true

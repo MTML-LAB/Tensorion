@@ -5,3 +5,13 @@ results/
 results/
 sample_data/
 outputs/
+
+logs/
+
+train.sh
+
+.github/
+.pytest_cache/
+.ruff_cache/
+
+.venv/

@@ -1,0 +1,10 @@
+_target_: tensorion.optimizers.factory.create_st_hosvd_tensorion_optimizer
+lr: 0.001
+wd: 0.005
+momentum: 0.95
+nesterov: false
+min_dim: 3
+ranks: 16
+nuclear: false
+adjust_lr: true
+params: ???

@@ -12,7 +12,7 @@ from hydra.utils import instantiate
 from typing import Literal, Any
 
 from tensorion.models import resnet, vit
-from tensorion.optimizers import tensorion, tensorion_sgd
+from tensorion.optimizers import tensorion, tensorion_sgd, tensorion_st_hosvd, tensorion_st_hosvd_sgd
 from tensorion.schedulers import WarmupCosineAnnealingWarmRestarts
 
 from tensorion import data_preparation
@@ -97,6 +97,55 @@ def get_optim_and_kwargs(
             "wd": 5e-3,
             "sgd_momentum": 0.95,
         }
+    elif optim_name == "STHoSVDTensorion":
+        optimizer = tensorion_st_hosvd.STHoSVDTensorion
+        min_dim: int = optimizer_kwargs.get("min_dim", 2)
+
+        muon_params = []
+        adamw_params = []
+
+        for name, param in model.named_parameters():
+            if param.ndim >= min_dim:
+                muon_params.append(param)
+            else:
+                adamw_params.append(param)
+
+        kwargs = {
+            "muon_params": muon_params,
+            "adamw_params": adamw_params,
+            "nesterov": False,
+            "momentum": 0.95,
+            "wd": 5e-3,
+            "adamw_betas": (0.9, 0.999),
+            "adamw_eps": 1e-8,
+            "ranks": optimizer_kwargs.get("ranks", 8),
+            "nuclear": optimizer_kwargs.get("nuclear", False),
+            "adjust_lr": optimizer_kwargs.get("adjust_lr", True),
+        }
+    elif optim_name == "STHoSVDTensorionSGD":
+        optimizer = tensorion_st_hosvd_sgd.STHoSVDTensorionSGD
+        min_dim: int = optimizer_kwargs.get("min_dim", 2)
+
+        muon_params = []
+        sgd_params = []
+
+        for name, param in model.named_parameters():
+            if param.ndim >= min_dim:
+                muon_params.append(param)
+            else:
+                sgd_params.append(param)
+
+        kwargs = {
+            "muon_params": muon_params,
+            "sgd_params": sgd_params,
+            "nesterov": False,
+            "momentum": 0.95,
+            "wd": 5e-3,
+            "sgd_momentum": 0.95,
+            "ranks": optimizer_kwargs.get("ranks", 8),
+            "nuclear": optimizer_kwargs.get("nuclear", False),
+            "adjust_lr": optimizer_kwargs.get("adjust_lr", True),
+        }
     else:
         raise ValueError("Incorrect optimizer name")
 
@@ -126,9 +175,12 @@ def get_scheduler_and_kwargs(
     return scheduler, kwargs
 
 
+# Note: load_model is deprecated. Models are now instantiated via Hydra's instantiate(cfg.model)
+# This function is kept for backward compatibility but is not used in the main pipeline.
 def load_model(
     model_name: Literal["ResNet18", "ResNet34", "VIT"], num_classes: int, device
 ) -> nn.Module:
+    """Deprecated: Use Hydra's instantiate(cfg.model) instead."""
     if model_name == "ResNet18":
         model = resnet.ResNet18(num_classes=num_classes)
     elif model_name == "ResNet34":
