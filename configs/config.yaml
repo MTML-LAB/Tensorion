@@ -1,25 +1,53 @@
 defaults:
-  - dataset: cifar10
+  - dataset: barcoded_mnist_bal
   - dataloader: default
-  - models@model: resnet18
-  - optimizers@optimizer: adamw
-  - schedulers@scheduler: onecyclelr
-  - criterions@criterion: ce
+  - model: resnet18
+  - optimizer: adamw
+  - scheduler: onecyclelr
+  - criterion: ce
   - _self_
 
 seed: 42
-save_dir: "./results/exp1/${hydra:runtime.choices.optimizer}_${hydra:runtime.choices.dataset}"
+save_dir: "${hydra:runtime.output_dir}/results/"
 
-num_epochs: 150
+num_epochs: 50
 
 comet:
-  enabled: false
+  enabled: true
   api_key: null
   workspace: null
-  project_name: null
-  experiment_name: null
-  tags: null
-  offline: true
+  project_name: Tensorion
+  experiment_name: opt=${hydra:runtime.choices.optimizer}_lr=${optimizer.lr}
+  tags: 
+  - BarcodedMNIST
+  - with_mnist=${dataset.with_mnist}
+  - ${hydra:runtime.choices.model}
+  - ${hydra:runtime.choices.dataset}
+  - ${hydra:runtime.choices.optimizer}
+  - ${hydra:runtime.choices.scheduler}
+  offline: false
   offline_directory: "${save_dir}/comet_offline"
   log_code: false
   code_dir: null
+
+hydra:
+  sweep:
+    dir: multirun/
+    subdir: ${hydra:runtime.choices.optimizer}/lr=${optimizer.lr}/${hydra.job.override_dirname}
+  job:
+    config:
+      override_dirname:
+        exclude_keys:
+          - seed
+          - optimizer
+          - optimizer.lr
+          - comet.enabled
+          - comet.api_key
+          - comet.workspace
+          - comet.project_name
+          - comet.experiment_name
+          - comet.tags
+          - comet.offline
+          - comet.offline_directory
+          - comet.log_code
+          - comet.code_dir

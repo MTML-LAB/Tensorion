@@ -1,0 +1,7 @@
+defaults:
+  - transforms: mnist
+
+_target_: tensorion.datasets.mnist._load_mnist
+num_classes: 10
+download: true
+data_path: null

@@ -1,0 +1,8 @@
+train:
+  _target_: torchvision.transforms.Compose
+  transforms:
+  - _target_: tensorion.data_transforms.ConvertToRGB
+test:
+  _target_: torchvision.transforms.Compose
+  transforms:
+  - _target_: tensorion.data_transforms.ConvertToRGB

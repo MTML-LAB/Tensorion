@@ -1,7 +1,18 @@
 import torch
 
+<<<<<<< HEAD
 from tensorion import projectors
 from functools import partial
+=======
+from omegaconf import DictConfig
+
+from .. import tensor_utils
+from .. import projectors
+from .. import loggers
+
+
+__all__ = ['TensorionSGD', '_instantiate_tensorion_sgd']
+>>>>>>> origin/class_imbalance
 
 
 class TensorionSGD(torch.optim.Optimizer):
@@ -191,3 +202,25 @@ class TensorionSGD(torch.optim.Optimizer):
                 p.add_(g, alpha=-lr)
 
         return loss
+
+
+def _instantiate_tensorion_sgd(params, **kwargs) -> TensorionSGD:
+    muon_params = []
+    sgd_params = []
+
+    min_dim = kwargs.get('min_dim', 3)
+
+    for param in params:
+        if param.ndim >= min_dim:
+            muon_params.append(param)
+        else:
+            sgd_params.append(param)
+
+    opt = TensorionSGD(
+        params,
+        muon_params=muon_params,
+        sgd_params=sgd_params,
+        **kwargs
+    )
+
+    return opt
