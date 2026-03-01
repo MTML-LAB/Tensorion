@@ -1,9 +1,4 @@
-<<<<<<< HEAD
-from typing import Any
-=======
 from typing import Any, Union
-from hydra.utils import instantiate
->>>>>>> origin/class_imbalance
 
 import torch
 import numpy as np

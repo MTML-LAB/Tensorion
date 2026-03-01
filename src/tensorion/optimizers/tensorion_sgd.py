@@ -1,18 +1,7 @@
 import torch
 
-<<<<<<< HEAD
 from tensorion import projectors
 from functools import partial
-=======
-from omegaconf import DictConfig
-
-from .. import tensor_utils
-from .. import projectors
-from .. import loggers
-
-
-__all__ = ['TensorionSGD', '_instantiate_tensorion_sgd']
->>>>>>> origin/class_imbalance
 
 
 class TensorionSGD(torch.optim.Optimizer):
