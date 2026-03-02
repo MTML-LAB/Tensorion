@@ -1,4 +1,4 @@
-from typing import Any, Union
+from typing import Union
 
 import torch
 import numpy as np
@@ -11,7 +11,7 @@ class ConvertToRGB:
             return img.repeat(3, 1, 1) if img.shape[0] == 1 else img
         if isinstance(img, np.ndarray):
             return np.repeat(img, 3, axis=0) if img.shape[0] == 1 else img
-        
+
         return img.convert("RGB")
 
 

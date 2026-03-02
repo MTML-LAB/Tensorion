@@ -33,9 +33,7 @@ def _resolve_named_parameters(
     if params_list and _looks_like_named_param(params_list[0]):
         return list(params_list)
 
-    raise ValueError(
-        "CombinedOptimizer requires named_parameters to select by name."
-    )
+    raise ValueError("CombinedOptimizer requires named_parameters to select by name.")
 
 
 def _build_matcher_re(patterns: Sequence[str]):
@@ -107,9 +105,7 @@ def _partition_parameters(
         seen[param_id] = name
 
     if not selected:
-        raise ValueError(
-            "selectors.include did not match any trainable parameters."
-        )
+        raise ValueError("selectors.include did not match any trainable parameters.")
     if not remaining:
         raise ValueError(
             "selectors.include matched all trainable parameters; "

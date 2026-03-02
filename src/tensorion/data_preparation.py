@@ -16,10 +16,29 @@ def _set_worker_seed(worker_id):
 
 
 def _require_cfg(cfg: DictConfig, key: str, context: str):
+    """Require a config key, safely handling potential Hydra interpolation errors.
+
+    First tries to get the value using OmegaConf.select(). If that fails due to
+    unresolved interpolations, tries to get the raw value using _get_node().
+    """
     if OmegaConf.is_missing(cfg, key):
         raise ValueError(f"Missing required config key '{key}' in {context}")
 
-    value = OmegaConf.select(cfg, key)
+    value = None
+    try:
+        # Try to resolve the value (works if Hydra is running and interpolations are resolved)
+        value = OmegaConf.select(cfg, key)
+    except Exception:
+        # If resolution fails (e.g., due to unresolved Hydra interpolations),
+        # try to get the raw value using _get_node()
+        try:
+            if hasattr(cfg, "_get_node"):
+                node = cfg._get_node(key)
+                if node is not None:
+                    value = node._value() if hasattr(node, "_value") else node
+        except Exception:
+            pass
+
     if value is None:
         raise ValueError(f"Missing required config key '{key}' in {context}")
 

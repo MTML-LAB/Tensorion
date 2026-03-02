@@ -11,7 +11,7 @@ from omegaconf import DictConfig
 from ..data_transforms import build_split_transform
 
 
-__all__ = ['_load_barcoded_mnist']
+__all__ = ["_load_barcoded_mnist"]
 
 CORNERS_10 = (
     (0, 0),
@@ -128,9 +128,13 @@ def make_barcoded_mnist(
 
     if with_mnist:
         X_tr = torch.cat([torch.from_numpy(mnist_x_tr).to(torch.float32), X_tr], dim=0)
-        y_tr = torch.cat([torch.from_numpy(mnist_y_tr).to(torch.long), y_tr + 10], dim=0)
+        y_tr = torch.cat(
+            [torch.from_numpy(mnist_y_tr).to(torch.long), y_tr + 10], dim=0
+        )
         X_va = torch.cat([torch.from_numpy(mnist_x_va).to(torch.float32), X_va], dim=0)
-        y_va = torch.cat([torch.from_numpy(mnist_y_va).to(torch.long), y_va + 10], dim=0)
+        y_va = torch.cat(
+            [torch.from_numpy(mnist_y_va).to(torch.long), y_va + 10], dim=0
+        )
 
     if normalize:
 

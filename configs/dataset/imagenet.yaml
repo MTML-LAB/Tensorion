@@ -3,6 +3,7 @@ defaults:
 
 _target_: tensorion.datasets.hf_imagenet._load_imagenet
 num_classes: 1000
-download: false
+img_size: 224
+download: true
 data_path: ???
 hf_name: imagenet-1k

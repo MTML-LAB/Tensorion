@@ -40,7 +40,7 @@ def test_resnet18_cifar10_training_short(tmp_path, monkeypatch):
             config_name="config.yaml",
             overrides=[
                 "dataset=cifar10",
-                "models@model=resnet18",
+                "model=resnet18",
                 "num_epochs=1",
                 "save_steps=1",
                 "dataloader.train.batch_size=8",

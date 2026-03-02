@@ -40,27 +40,35 @@ class STHoSVDTensorionSGD(torch.optim.Optimizer):
         params = list(params)
         muon_params = list(muon_params) if muon_params is not None else []
         sgd_params = list(sgd_params) if sgd_params is not None else []
-        
+
         # Validate that muon_params and sgd_params are subsets of params
         muon_set = set(muon_params)
         sgd_set = set(sgd_params)
         params_set = set(params)
-        
+
         if muon_set - params_set:
-            raise ValueError(f"muon_params contains parameters not in params: {muon_set - params_set}")
+            raise ValueError(
+                f"muon_params contains parameters not in params: {muon_set - params_set}"
+            )
         if sgd_set - params_set:
-            raise ValueError(f"sgd_params contains parameters not in params: {sgd_set - params_set}")
+            raise ValueError(
+                f"sgd_params contains parameters not in params: {sgd_set - params_set}"
+            )
         if muon_set & sgd_set:
-            raise ValueError(f"Parameters cannot be in both muon_params and sgd_params: {muon_set & sgd_set}")
+            raise ValueError(
+                f"Parameters cannot be in both muon_params and sgd_params: {muon_set & sgd_set}"
+            )
 
         super().__init__(params, defaults)
-        
+
         # Mark parameters for processing
         # If muon_params is specified, only those get muon processing
         # Otherwise, auto-detect based on criteria (ndim >= min_dim)
         if muon_params:
             for p in muon_params:
-                assert p.ndim >= min_dim, f"Parameter in muon_params must have ndim >= {min_dim}, got {p.ndim}"
+                assert p.ndim >= min_dim, (
+                    f"Parameter in muon_params must have ndim >= {min_dim}, got {p.ndim}"
+                )
                 self.state[p]["use_muon"] = True
         else:
             # Auto-detect: use muon for all params with ndim >= min_dim
@@ -69,7 +77,7 @@ class STHoSVDTensorionSGD(torch.optim.Optimizer):
                     self.state[p]["use_muon"] = True
                 else:
                     self.state[p]["use_muon"] = False
-        
+
         # Mark sgd_params explicitly (they override auto-detection)
         for p in sgd_params:
             self.state[p]["use_muon"] = False
@@ -101,7 +109,9 @@ class STHoSVDTensorionSGD(torch.optim.Optimizer):
             #           Muon           #
             ############################
 
-            params = [p for p in group["params"] if self.state[p].get("use_muon", False)]
+            params = [
+                p for p in group["params"] if self.state[p].get("use_muon", False)
+            ]
             # import pdb; pdb.set_trace()
             lr = group["lr"]
             wd = group["wd"]
@@ -175,7 +185,9 @@ class STHoSVDTensorionSGD(torch.optim.Optimizer):
             #       SGD backup       #
             ############################
 
-            params = [p for p in group["params"] if not self.state[p].get("use_muon", False)]
+            params = [
+                p for p in group["params"] if not self.state[p].get("use_muon", False)
+            ]
             lr = group["lr"]
             mu = group["sgd_momentum"]
             weight_decay = group["wd"]

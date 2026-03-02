@@ -12,20 +12,32 @@ save_dir: "${hydra:runtime.output_dir}/results/"
 
 num_epochs: 50
 
+save_steps: -1
+
 comet:
+  # Enable/disable CometML logging
   enabled: true
-  api_key: null
-  workspace: null
-  project_name: Tensorion
-  experiment_name: opt=${hydra:runtime.choices.optimizer}_lr=${optimizer.lr}
+  api_key: Um0P7ZJfSsUpck9nIdN89OaMy
+  workspace: "xenomirant"
+  
+  project_name: "Tensorion"
+
+  experiment_name: opt=${hydra:runtime.choices.optimizer}_model=${hydra:runtime.choices.model}_ds=${hydra:runtime.choices.dataset}
+  
+  # Tags for organizing experiments. Automatically includes model, dataset, optimizer, scheduler
+  # Remove hardcoded tags and use only dynamic ones based on config choices
   tags: 
-  - BarcodedMNIST
-  - with_mnist=${dataset.with_mnist}
   - ${hydra:runtime.choices.model}
   - ${hydra:runtime.choices.dataset}
   - ${hydra:runtime.choices.optimizer}
   - ${hydra:runtime.choices.scheduler}
+  
+  # Offline mode: logs are saved locally and can be uploaded later.
+  # Default behavior is ONLINE mode; set this to true explicitly if you want offline logging.
   offline: false
+  # Directory where offline logs will be saved (relative to save_dir or absolute path)
+  # Uses ${save_dir} which will be resolved dynamically from the config
+  # If not specified, CometML will use its default offline directory
   offline_directory: "${save_dir}/comet_offline"
   log_code: false
   code_dir: null

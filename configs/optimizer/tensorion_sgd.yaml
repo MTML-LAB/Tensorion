@@ -1,20 +1,9 @@
-<<<<<<< HEAD:configs/optimizers/tensorion_sgd.yaml
 _target_: tensorion.optimizers.factory.create_tensorion_sgd_optimizer
-lr: 0.001
-wd: 0.005
-momentum: 0.95
-nesterov: false
-min_dim: 3
-params: ???
-=======
-_target_:  tensorion.optimizers.tensorion_sgd._instantiate_tensorion_sgd
-
 lr: 1e-3
 wd: 0.0001
-params: ???
 momentum: 0.95
 nesterov: false
 nuclear: false
 adjust_lr: true
 min_dim: 3
->>>>>>> origin/class_imbalance:configs/optimizer/tensorion_sgd.yaml
+params: ???

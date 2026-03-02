@@ -163,6 +163,11 @@ def train_loop(
     best_epoch = None
     last_checkpoint_dir = None
 
+    # Log initial training configuration
+    if experiment_logger is not None:
+        experiment_logger.log_other("training/num_epochs", num_epochs)
+        experiment_logger.log_other("training/scheduler_step", scheduler_step)
+
     acc, test_loss = test(
         model=model, test_loader=test_loader, loss_fn=criterion, device=device
     )
@@ -185,6 +190,7 @@ def train_loop(
         )
 
     for epoch in range(1, num_epochs + 1):
+        # train_epoch currently returns (train_loss, num_samples, elapsed)
         train_loss, num_samples, elapsed = train_epoch(
             model=model,
             optimizer=optimizer,
@@ -195,6 +201,8 @@ def train_loop(
             epoch=epoch,
             scheduler_step=scheduler_step,
         )
+        # Placeholder for gradient statistics; currently not computed
+        grad_stats: dict[str, float] = {}
         lr = scheduler.get_last_lr()
 
         acc, test_loss = test(
@@ -216,10 +224,13 @@ def train_loop(
                 "train/loss": train_loss,
                 "test/loss": test_loss,
                 "test/accuracy": acc,
+                "train/epoch_time": elapsed,
                 **_format_lrs(lr),
             }
             if elapsed > 0:
                 metrics["train/samples_per_sec"] = num_samples / elapsed
+            # Add gradient statistics
+            metrics.update(grad_stats)
             experiment_logger.log_metrics(metrics, step=epoch, epoch=epoch)
 
         if acc > best_acc:
@@ -232,17 +243,35 @@ def train_loop(
             save_checkpoint(model, optimizer, scheduler, save_path, epoch)
             last_checkpoint_dir = pathlib.Path(save_path) / f"epoch-{epoch}"
 
-    if experiment_logger is not None and save_steps > 0 and save_path is not None:
-        if last_checkpoint_dir is not None:
-            experiment_logger.log_asset_folder(
-                str(last_checkpoint_dir), name="checkpoint-last"
-            )
+    if experiment_logger is not None:
+        # Log best model metrics
         if best_epoch is not None:
-            best_dir = pathlib.Path(save_path) / f"epoch-{best_epoch}"
-            if best_dir.exists():
-                experiment_logger.log_asset_folder(
-                    str(best_dir), name="checkpoint-best"
+            experiment_logger.log_other("best_epoch", best_epoch)
+            experiment_logger.log_other("best_accuracy", best_acc)
+            if best_epoch < len(test_losses):
+                experiment_logger.log_other(
+                    "best_test_loss", test_losses[best_epoch - 1]
                 )
+
+        # Log final metrics
+        if train_losses:
+            experiment_logger.log_other("final_train_loss", train_losses[-1])
+        if test_losses:
+            experiment_logger.log_other("final_test_loss", test_losses[-1])
+        if accs:
+            experiment_logger.log_other("final_accuracy", accs[-1])
+
+        if save_steps > 0 and save_path is not None:
+            if last_checkpoint_dir is not None:
+                experiment_logger.log_asset_folder(
+                    str(last_checkpoint_dir), name="checkpoint-last"
+                )
+            if best_epoch is not None:
+                best_dir = pathlib.Path(save_path) / f"epoch-{best_epoch}"
+                if best_dir.exists():
+                    experiment_logger.log_asset_folder(
+                        str(best_dir), name="checkpoint-best"
+                    )
 
     return (train_losses, test_losses, accs, lr_diffs)
 

@@ -38,6 +38,8 @@ def _load_simple_cnn(
         raise ValueError("simple_cnn layers must be a non-empty sequence")
     for idx, layer in enumerate(layer_modules):
         if not isinstance(layer, nn.Module):
-            raise ValueError(f"simple_cnn.layers[{idx}] did not instantiate to nn.Module")
+            raise ValueError(
+                f"simple_cnn.layers[{idx}] did not instantiate to nn.Module"
+            )
 
     return SimpleCNN(layer_modules)

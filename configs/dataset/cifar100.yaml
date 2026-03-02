@@ -3,5 +3,6 @@ defaults:
 
 _target_: tensorion.datasets.cifar._load_CIFAR100
 num_classes: 100
+img_size: 32
 download: true
 data_path: null

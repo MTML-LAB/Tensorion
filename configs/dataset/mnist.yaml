@@ -3,5 +3,6 @@ defaults:
 
 _target_: tensorion.datasets.mnist._load_mnist
 num_classes: 10
+img_size: 28
 download: true
 data_path: null

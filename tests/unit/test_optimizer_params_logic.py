@@ -4,6 +4,7 @@ Test the improved parameter handling logic in optimizers.
 import torch
 import pytest
 from tensorion.optimizers import TensorionSGD, STHoSVDTensorion
+from tensorion.optimizers import factory as optim_factory
 
 
 def test_params_as_base_set():
@@ -125,6 +126,65 @@ def test_st_hosvd_with_new_logic():
     assert muon_param.grad is not None
     assert adamw_param.grad is not None
     assert other_param.grad is not None
+
+
+class _SimpleModel(torch.nn.Module):
+    """Small model to expose a realistic parameter iterator (model.parameters())."""
+
+    def __init__(self):
+        super().__init__()
+        self.conv = torch.nn.Conv2d(3, 4, kernel_size=3)
+        self.fc = torch.nn.Linear(4 * 30 * 30, 10)
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        x = self.conv(x)
+        x = torch.relu(x)
+        x = x.view(x.size(0), -1)
+        return self.fc(x)
+
+
+def test_tensorion_sgd_factory_accepts_parameter_iterator():
+    """
+    Regression test for iterator exhaustion in create_tensorion_sgd_optimizer.
+
+    The factory used to iterate over a one-shot iterable (model.parameters())
+    to build muon/sgd parameter lists and then pass the already-consumed
+    iterator into TensorionSGD, leading to an empty params list and a
+    ValueError from the subset validation.
+    """
+    model = _SimpleModel()
+
+    # Use the real parameter iterator, not a pre-built list
+    optimizer = optim_factory.create_tensorion_sgd_optimizer(
+        params=model.parameters(),
+        lr=1e-2,
+        min_dim=3,
+    )
+
+    x = torch.randn(2, 3, 32, 32)
+    out = model(x).sum()
+    out.backward()
+
+    # Should run without raising and update parameters
+    optimizer.step()
+
+
+def test_st_hosvd_tensorion_sgd_factory_accepts_parameter_iterator():
+    """Same iterator-exhaustion regression test for the ST-HOSVD TensorionSGD variant."""
+    model = _SimpleModel()
+
+    optimizer = optim_factory.create_st_hosvd_tensorion_sgd_optimizer(
+        params=model.parameters(),
+        lr=1e-2,
+        ranks=2,
+        min_dim=3,
+    )
+
+    x = torch.randn(2, 3, 32, 32)
+    out = model(x).sum()
+    out.backward()
+
+    optimizer.step()
 
 
 if __name__ == "__main__":

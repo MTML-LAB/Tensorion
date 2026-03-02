@@ -220,11 +220,13 @@ def st_hosvd_truncation(
     if isinstance(ranks, int):
         ranks = [ranks] * len(x_dims)
     else:
+        # Reorder ranks to follow the processing order (sorted by dimension size)
         ranks = operator.itemgetter(*dims_idxs)(ranks)
 
-    mode = dims_idxs[0]
     x = x0
-    factors = []
+    # We collect factors keyed by their original mode index so we can
+    # return them in the original order expected by tucker_reconstruct.
+    factors_by_mode: dict[int, Tensor] = {}
 
     for mode, rank in zip(dims_idxs, ranks):
         original_shape = x.shape
@@ -238,13 +240,17 @@ def st_hosvd_truncation(
 
         orthoprojector = u_t[:, :rank]
         x = orthoprojector.T @ x_unfolded
-        factors.append(orthoprojector)
+        factors_by_mode[mode] = orthoprojector
 
         # Compute new shape after projection: replace original_shape[mode] with rank
         new_shape = list(original_shape)
         new_shape[mode] = rank
         new_shape = tuple(new_shape)
         x = fold(x, new_shape, mode)
+
+    # Order factors by the original mode index so that tucker_reconstruct
+    # receives (core, factors) aligned in the natural axis order.
+    factors = [factors_by_mode[i] for i in range(len(x_dims))]
 
     return x, factors
 
