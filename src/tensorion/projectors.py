@@ -92,7 +92,7 @@ def project_spectral_sphere(x: Tensor, idx: Union[int, list[int], None]) -> Tens
     return x_proj
 
 
-def project_ns(x: Tensor, idx: Union[int, list[int], None], num_ns_iterations: int = 2):
+def project_ns(x: Tensor, idx: Union[int, list[int], None], num_ns_iterations: int = 5):
     X = unfold_by_idx(x, idx)
 
     transpose = X.shape[0] > X.shape[1]
@@ -105,8 +105,13 @@ def project_ns(x: Tensor, idx: Union[int, list[int], None], num_ns_iterations: i
     m = X.shape[0]
     I = torch.eye(m, device=X.device, dtype=X.dtype)
 
+    a, b, c = (3.4445, -4.7750, 2.0315)
     for _ in range(num_ns_iterations):
-        X = (3 * I - X @ X.T) @ (X / 2)
+        A = X @ X.T
+        B = (
+            b * A + c * A @ A
+        )  # adapted from suggestion by @jxbz, @leloykun, and @YouJiacheng
+        X = a * X + B @ X
 
     if transpose:
         X.transpose_(0, 1)
