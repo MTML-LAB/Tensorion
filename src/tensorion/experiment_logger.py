@@ -72,7 +72,7 @@ class ExperimentLogger:
 
 class NullExperimentLogger(ExperimentLogger):
     def __init__(self, reason: Optional[str] = None, **base_kwargs) -> None:
-        super.__init__(**base_kwargs)
+        super().__init__(**base_kwargs)
         self.reason = reason
 
 
@@ -80,7 +80,7 @@ class CometExperimentLogger(ExperimentLogger):
     enabled = True
 
     def __init__(self, experiment: Any, **base_kwargs) -> None:
-        super.__init__(**base_kwargs)
+        super().__init__(**base_kwargs)
         self._experiment = experiment
 
     def log_parameters(self, params: dict[str, Any]) -> None:
