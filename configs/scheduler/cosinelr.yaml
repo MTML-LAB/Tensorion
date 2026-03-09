@@ -1,5 +1,6 @@
 scheduler_kwargs:
   _target_: torch.optim.lr_scheduler.CosineAnnealingLR
   optimizer: ???
-  T_max: 110
+  T_max: 200
+  eta_min: 1e-7
 scheduler_step: epoch

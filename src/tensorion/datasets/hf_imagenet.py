@@ -52,7 +52,7 @@ class HF_imagenet(Dataset):
 def _load_imagenet(
     download: bool = True,
     data_path: Optional[str] = None,
-    hf_name: Optional[str] = "imagenet-1k",
+    hf_name: Optional[str] = "zh-plus/tiny-imagenet",
     transforms: Optional[DictConfig] = None,
     **_unused,
 ):
@@ -60,13 +60,13 @@ def _load_imagenet(
         raise ValueError("The hf_name is required for ImageNet loading")
 
     transform_train = build_split_transform(transforms, "train")
-    transform_test = build_split_transform(transforms, "test")
+    transform_test = build_split_transform(transforms, "valid")
 
     ds = HF_imagenet._load_imagenet_dataset(
         download=download, data_path=data_path, hf_name=hf_name
     )
 
     train_ds = HF_imagenet(ds["train"], transform=transform_train)
-    test_ds = HF_imagenet(ds["validation"], transform=transform_test)
+    test_ds = HF_imagenet(ds["valid"], transform=transform_test)
 
     return train_ds, test_ds

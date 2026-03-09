@@ -38,11 +38,19 @@ class Tensorion(torch.optim.Optimizer):
         super().__init__(params, defaults)
         
         # Sort parameters into those for which we will use Muon, and those for which we will not
+        count = 0
         for p in params:
             self.state[p]["use_muon"] = (p.ndim >= min_dim)
 
+            if self.state[p]["use_muon"]:
+                count += 1
+
+        print(f'number of params for tensorion is {count}')
+
         self.projector = projector
         print(f"{self.projector=}")
+
+
 
     def adjust_lr_for_muon(self, lr, irms: float):
         # <-- fast version for fixed ortho mode -->
@@ -121,11 +129,15 @@ class Tensorion(torch.optim.Optimizer):
                 else:
                     adjusted_lr = lr
 
+                #1st iter of air benchmark bernstein
+                p.data.mul_(len(p.data) / p.data.norm())
+
                 # apply weight decay
-                p.data.mul_(1 - lr * wd)
+                # p.data.mul_(1 - lr * wd)
 
                 # apply update
                 p.data.add_(u, alpha=-adjusted_lr)
+
 
             ############################
             #       AdamW backup       #

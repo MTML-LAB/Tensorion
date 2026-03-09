@@ -217,6 +217,13 @@ def train_loop(
                 "test/accuracy": acc,
                 **_format_lrs(lr),
             }
+
+            for name, params in model.named_parameters():
+                if params.ndim > 3:
+                    metrics[f'{name} norm'] = torch.norm(params)
+                if 'fc' in name:
+                    metrics[f'{name} norm'] = torch.norm(params)
+
             if elapsed > 0:
                 metrics["train/samples_per_sec"] = num_samples / elapsed
             experiment_logger.log_metrics(metrics, step=epoch, epoch=epoch)

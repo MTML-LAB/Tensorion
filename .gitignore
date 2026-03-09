@@ -1,7 +1,10 @@
 data/
 results/
 *.txt
+*.out
+*.sh
 **/__pycache__/
 results/
 sample_data/
 outputs/
+multirun/

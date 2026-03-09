@@ -5,6 +5,7 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+import torchvision
 
 
 class BasicBlock(nn.Module):
@@ -132,11 +133,17 @@ def ResNet101(num_classes: int = 10):
 def ResNet152(num_classes: int = 10):
     return ResNet(Bottleneck, [3, 8, 36, 3], num_classes=num_classes)
 
+def imagenet_ResNet34(num_classes: int = 200):
+    model = torchvision.models.resnet34()
+    model.fc = nn.Linear(in_features=model.fc.in_features, out_features=num_classes)
+    print(model)
+    return model
+
 
 def test():
-    net = ResNet18()
-    y = net(torch.randn(1, 3, 32, 32))
-    print(y.size())
-
+    net = ResNet34()
+    # y = net(torch.randn(1, 3, 32, 32))
+    # print(y.size())
+    print(net)
 
 # test()

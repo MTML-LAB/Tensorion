@@ -37,8 +37,8 @@ class TensorionSGD(torch.optim.Optimizer):
         super().__init__(params, defaults)
         
         # Sort parameters into those for which we will use Muon, and those for which we will not
-        for p in params:
-            self.state[p]["use_muon"] = (p.ndim >= min_dim)
+        for i, p in enumerate(params):
+            self.state[p]["use_muon"] = (p.ndim >= min_dim) and (i != 0)
         
         self.projector = projector
         print(f"{self.projector=}")
@@ -52,7 +52,8 @@ class TensorionSGD(torch.optim.Optimizer):
         # <!- fast version for fixed ortho mode -!>
 
         # irms was calculated by projector
-        adjusted_ratio = 0.2 * irms
+        adjusted_ratio = 0.2 * irms #old is 0.004
+        # print(adjusted_ratio)
         adjusted_lr = lr * adjusted_ratio
         return adjusted_lr
 

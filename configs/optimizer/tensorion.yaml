@@ -1,11 +1,11 @@
 _target_:  tensorion.optimizers.tensorion.Tensorion
 
 defaults:
-  - projector: unfold_projector
+  - projector: maxrank_mode_projector
 
 params: ???
-lr: 1e-4
-wd: 1e-4
+lr: ???
+wd: 5e-4
 momentum: 0.95
 nesterov: false
 nuclear: false

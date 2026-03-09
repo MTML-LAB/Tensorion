@@ -1,8 +1,8 @@
 train:
   _target_: torch.utils.data.DataLoader
-  batch_size: 1000
+  batch_size: 128
   shuffle: true
-  num_workers: 4
+  num_workers: 8
   pin_memory: true
 test:
   _target_: torch.utils.data.DataLoader

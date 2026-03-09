@@ -1,0 +1,2 @@
+_target_: tensorion.models.resnet.imagenet_ResNet34
+num_classes: ${dataset.num_classes}
