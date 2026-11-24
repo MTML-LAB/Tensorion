@@ -24,6 +24,8 @@ python run.py optimizer=adamw dataset=cifar100         # a baseline
 python run.py -m optimizer.lr=1e-4,3e-4,1e-3           # a sweep
 ```
 
+Which layers get the Tensorion update is set in `configs/optimizer/tensorion.yaml` by `tensorion_modules`, a list of module classes. The default is every convolution kernel, including 1×1 convolutions, as in the paper. All other parameters use the fallback optimizer.
+
 Datasets are downloaded to `./data` on first use. Results go to `./results/`.
 
 Configs live in `configs/`:

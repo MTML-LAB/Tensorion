@@ -47,7 +47,7 @@ The `unfolding` argument decides which axes of a tensor become rows. The remaini
 
 `"offline"` is the paper's main strategy. `"online"` picks the unfolding that is optimal for the paper's tensor norm.
 
-Axes of size 1 are ignored: a depthwise kernel `(64, 1, 3, 3)` has the unfoldings of a `(64, 3, 3)` tensor, and a 1×1 convolution is a matrix. A parameter with fewer than two axes larger than 1, such as a class token `(1, 1, 768)`, is a vector and goes to the fallback optimizer.
+Axes of size 1 are ignored everywhere, so the optimizer does not depend on how a weight is stored. A depthwise kernel `(64, 1, 3, 3)` has the unfoldings of a `(64, 3, 3)` tensor. A 1×1 convolution `(128, 64, 1, 1)` is a matrix and gets the same update as a linear layer with the same weights. A parameter with fewer than two axes larger than 1, such as a class token `(1, 1, 768)`, is a vector and goes to the fallback optimizer.
 
 ### How the online choice stays cheap
 
@@ -113,12 +113,12 @@ The CANS defaults are the Muon setting of the CANS paper (7 steps, lower singula
 | `ns_steps` | `None` | iterations of iterative orthogonalizers. `None` uses each method's default. |
 | `adjust_lr_fn` | `"match_rms_adamw"` | learning rate scaling for an unfolded `rows × cols` update: `"match_rms_adamw"` multiplies by `0.2·√max(rows, cols)` so AdamW learning rates carry over, `"original"` by `√max(1, rows/cols)`, `None` applies no scaling |
 | `nuclear` | `False` | multiply the update by the nuclear norm of the unfolded momentum |
-| `min_ndim` | `2` | parameters with at least this many dimensions get the Tensorion update. Use `3` to keep linear layers on AdamW, as in the paper's experiments. |
+| `min_order` | `2` | parameters of at least this order get the Tensorion update. The order is the number of axes larger than 1. `3` keeps every matrix, including 1×1 convolutions, on the fallback. |
 | `fallback` | `"adamw"` | update for the other parameters: `"adamw"` or `"sgd"` |
 | `adamw_betas`, `adamw_eps` | `(0.9, 0.95)`, `1e-8` | AdamW fallback hyperparameters |
 | `sgd_momentum` | `0.95` | SGD fallback momentum |
 
-Every argument can be overridden per parameter group. A group can also set `use_muon=True/False` to force the update rule regardless of `min_ndim`.
+Every argument can be overridden per parameter group. A group can also set `use_muon=True/False` to force the update rule regardless of `min_order`.
 
 ## Example
 
@@ -161,7 +161,7 @@ optax.contrib.muon(1e-3, muon_weight_dimension_numbers=tensorion_jax.offline_dim
 
 ## Reproducing the paper
 
-The training pipeline (Hydra configs, ResNet/ViT models, CIFAR, Food-101 and ImageNet loaders) lives in [`experiments/`](experiments/). The release that accompanies the NeurIPS 2026 paper is tagged `neurips-2026`.
+The training pipeline (Hydra configs, ResNet/ViT models, CIFAR, Food-101 and ImageNet loaders) lives in [`experiments/`](experiments/). The experiments of the paper apply Tensorion to every convolution kernel and train all other parameters with the fallback. This includes 1×1 convolutions, which are matrices and therefore receive plain Muon updates. The experiment config states this routing explicitly, by module type. The release that accompanies the NeurIPS 2026 paper is tagged `neurips-2026`.
 
 ## Citation
 
