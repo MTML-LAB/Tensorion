@@ -1,6 +1,7 @@
+from tensorion.config_resolvers import register_resolvers
+
 from . import optimizers
 
-from .optimizers import Tensorion, TensorionSGD
+register_resolvers()
 
-__all__ = ["optimizers", "Tensorion", "TensorionSGD"]
-
+__all__ = ["optimizers"]

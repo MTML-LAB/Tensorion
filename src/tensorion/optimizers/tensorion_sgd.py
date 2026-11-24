@@ -4,19 +4,21 @@ from .. import tensor_utils
 from .. import projectors
 from .. import loggers
 
+from typing import Callable
+from tensorion.projectors import Projector
+
 
 class TensorionSGD(torch.optim.Optimizer):
     def __init__(
         self,
         params,
-        muon_params,
+        projector: Projector,
         lr=1e-3,
         wd=0.1,
         momentum=0.95,
         nesterov=False,
         nuclear=False,
         adjust_lr=True,
-        sgd_params=None,
         sgd_momentum=0.95,
         min_dim: int = 3,
     ):
@@ -30,27 +32,27 @@ class TensorionSGD(torch.optim.Optimizer):
             nuclear=nuclear,
             adjust_lr=adjust_lr,
         )
-
-        muon_params = list(muon_params)
-        sgd_params = list(sgd_params) if sgd_params is not None else []
-        params = muon_params + sgd_params
         
+        params = list(params)
         super().__init__(params, defaults)
+        
         # Sort parameters into those for which we will use Muon, and those for which we will not
-        for p in muon_params:
-            # Use Tensorion for every parameter in muon_params which is >= min_dim and doesn't look like an embedding or head layer
-            assert p.ndim >= min_dim, p.ndim
-            self.state[p]["use_muon"] = True
+        for p in params:
+            self.state[p]["use_muon"] = (p.ndim >= min_dim)
+        
+        self.projector = projector
+        print(f"{self.projector=}")
 
-        for p in sgd_params:
-            # Do not use Muon for parameters in sgd_params
-            self.state[p]["use_muon"] = False
+    def adjust_lr_for_muon(self, lr, irms: float):
+        # <-- fast version for fixed ortho mode -->
+        # A, B = (min(param_shape), math.prod(param_shape) // min(param_shape))
+        # # We adjust the learning rate and weight decay based on the size of the parameter matrix
+        # # as describted in the paper
+        # adjusted_ratio = 0.2 * (max(A, B) ** 0.5)
+        # <!- fast version for fixed ortho mode -!>
 
-    def adjust_lr_for_muon(self, lr, param_shape):
-        A, B = param_shape[:2]
-        # We adjust the learning rate and weight decay based on the size of the parameter matrix
-        # as describted in the paper
-        adjusted_ratio = 0.2 * (max(A, B) ** 0.5)
+        # irms was calculated by projector
+        adjusted_ratio = 0.2 * irms
         adjusted_lr = lr * adjusted_ratio
         return adjusted_lr
 
@@ -99,11 +101,15 @@ class TensorionSGD(torch.optim.Optimizer):
                     g = g.add(buf, alpha=momentum)
                 else:
                     g = buf
-                u = projectors.single_step_projection(
-                    x0=g,
-                    projector=projectors.project_spectral_sphere,
-                    num_sets=g.dim(), 
-                )['projection']
+
+                proj = self.projector(g)
+
+                if isinstance(proj, tuple):
+                    u, irms = proj
+                else:
+                    if adjust_lr:
+                        raise ValueError("The projector with irms=True required")
+                    u = proj
 
                 if nuclear:
                     nuclear = (g * u).sum()
@@ -111,9 +117,7 @@ class TensorionSGD(torch.optim.Optimizer):
 
                 if adjust_lr:
                     # scale update
-                    param_shape = p.shape
-                    param_shape = (min(param_shape), g.numel() // min(param_shape))
-                    adjusted_lr = self.adjust_lr_for_muon(lr, param_shape)
+                    adjusted_lr = self.adjust_lr_for_muon(lr, irms)
                 else:
                     adjusted_lr = lr
 

@@ -220,6 +220,7 @@ def train_loop(
             if elapsed > 0:
                 metrics["train/samples_per_sec"] = num_samples / elapsed
             experiment_logger.log_metrics(metrics, step=epoch, epoch=epoch)
+            experiment_logger.log_weight_norms(model, step=epoch, epoch=epoch)
 
         if acc > best_acc:
             best_acc = acc

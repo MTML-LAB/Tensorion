@@ -1,0 +1,18 @@
+_target_: tensorion.optimizers.combined_optimizer.CombinedOptimizer
+
+params: ???
+selectors:
+  include:
+    - "(^|.*\\.)head\\.(weight|bias)$"
+  match_type: regex
+optimizer1:
+  _target_: torch.optim.AdamW
+  lr: 1e-4
+  weight_decay: 0.01
+  params: ???
+optimizer2:
+  _target_: torch.optim.SGD
+  lr: 1e-2
+  momentum: 0.9
+  weight_decay: 0.0
+  params: ???

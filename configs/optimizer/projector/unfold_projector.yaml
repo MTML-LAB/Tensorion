@@ -1,0 +1,8 @@
+_target_: tensorion.projectors.build_unfold_projection
+
+projector:
+  _target_: tensorion.projectors.project_spectral_sphere
+  _partial_: true
+
+mode_idxs: [0, 1]
+requires_irms: true

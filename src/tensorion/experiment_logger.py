@@ -7,13 +7,28 @@ import warnings
 from pathlib import Path
 from typing import Any, Optional
 
+import torch
+from torch import nn
+
 from omegaconf import DictConfig, OmegaConf
 
 
 class ExperimentLogger:
     enabled = False
+    track_weight_norms: bool
+
+    def __init__(self, track_weight_norms: bool = False) -> None:
+        self.track_weight_norms = track_weight_norms
 
     def log_parameters(self, params: dict[str, Any]) -> None:
+        return None
+
+    def log_weight_norms(
+        self,
+        model: nn.Module,
+        step: Optional[int] = None,
+        epoch: Optional[int] = None,
+    ):
         return None
 
     def log_metrics(
@@ -56,18 +71,38 @@ class ExperimentLogger:
 
 
 class NullExperimentLogger(ExperimentLogger):
-    def __init__(self, reason: Optional[str] = None) -> None:
+    def __init__(self, reason: Optional[str] = None, **base_kwargs) -> None:
+        super().__init__(**base_kwargs)
         self.reason = reason
 
 
 class CometExperimentLogger(ExperimentLogger):
     enabled = True
 
-    def __init__(self, experiment: Any) -> None:
+    def __init__(self, experiment: Any, **base_kwargs) -> None:
+        super().__init__(**base_kwargs)
         self._experiment = experiment
 
     def log_parameters(self, params: dict[str, Any]) -> None:
         self._experiment.log_parameters(params)
+
+    @torch.no_grad()
+    def log_weight_norms(
+        self,
+        model: nn.Module,
+        step: Optional[int] = None,
+        epoch: Optional[int] = None,
+    ):
+        if not self.track_weight_norms:
+            return
+        
+        norms = {
+            f'weight/{name}': param.norm().item()
+            for name, param in model.named_parameters()
+            if param.requires_grad 
+        }
+        self._experiment.log_metrics(norms, step=step, epoch=epoch)
+
 
     def log_metrics(
         self,
@@ -152,8 +187,13 @@ def build_experiment_logger(cfg: DictConfig) -> ExperimentLogger:
         exp_kwargs["api_key"] = api_key
 
     experiment = experiment_cls(**{k: v for k, v in exp_kwargs.items() if v is not None})
-    logger = CometExperimentLogger(experiment)
+
+    logger_kwargs = {
+        'track_weight_norms': comet_cfg.get('track_weight_norms', False)
+    }
+    logger = CometExperimentLogger(experiment, **logger_kwargs)
     _configure_experiment(logger, cfg, comet_cfg, offline=offline)
+    
     return logger
 
 
