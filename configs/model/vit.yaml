@@ -1,2 +1,0 @@
-_target_: tensorion.models.vit.VIT_0
-num_classes: ${dataset.num_classes}

@@ -1,4 +1,0 @@
-scheduler_kwargs:
-  _target_: tensorion.schedulers.NoScheduler.NoScheduler
-  optimizer: ???
-scheduler_step: epoch

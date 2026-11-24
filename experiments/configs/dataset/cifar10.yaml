@@ -1,0 +1,7 @@
+defaults:
+  - transforms: cifar10
+
+_target_: tensorion_experiments.datasets.cifar._load_CIFAR10
+num_classes: 10
+download: true
+data_path: null

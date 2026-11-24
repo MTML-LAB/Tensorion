@@ -3,41 +3,41 @@ name: Tests
 on:
   pull_request:
   push:
-    branches:
-      - master
+    branches: [master]
 
 jobs:
-  tests:
+  optimizer:
+    name: optimizer (Python ${{ matrix.python }}, torch ${{ matrix.torch }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - python: "3.9"
+            torch: "2.1.*"
+          - python: "3.12"
+            torch: "*"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+        with:
+          python-version: ${{ matrix.python }}
+      - name: Install
+        run: uv pip install ".[test]" "torch==${{ matrix.torch }}" --extra-index-url https://download.pytorch.org/whl/cpu
+      - name: Test
+        run: pytest -q
+      - name: Quickstart
+        run: python examples/quickstart.py
+
+  experiments:
     runs-on: ubuntu-latest
     steps:
-      - name: Check out repository
-        uses: actions/checkout@v4
-
-      - name: Install Poetry
-        uses: snok/install-poetry@v1
-
-      - name: Setup Python
-        uses: actions/setup-python@v6
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
         with:
-          python-version: "3.11"
-          cache: poetry
-          cache-dependency-path: poetry.lock
-
-      - name: Select Python for Poetry venv
-        run: |
-          poetry env use python
-
-      - name: Install deps
-        run: |
-          poetry install --no-interaction --with dev -E cv -E optimization -E experiments
-
-      - name: Run tests with coverage
-        run: |
-          poetry run pytest --cov=tensorion --cov-report=term-missing --cov-report=xml -m "not integration"
-      
-      - name: Upload coverage.xml artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: coverage-xml
-          path: coverage.xml
-          if-no-files-found: error
+          python-version: "3.12"
+      - name: Install
+        run: uv pip install -e . -r experiments/requirements.txt --extra-index-url https://download.pytorch.org/whl/cpu
+      - name: Test
+        working-directory: experiments
+        run: pytest -q -m "not integration"

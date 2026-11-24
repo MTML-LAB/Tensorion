@@ -1,7 +1,23 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+build/
+dist/
+.venv/
+.pytest_cache/
+.coverage
+coverage.xml
+
+# Experiment outputs
 data/
 results/
-*.txt
-**/__pycache__/
-results/
-sample_data/
 outputs/
+multirun/
+sample_data/
+*.log
+
+# Editors / OS
+.idea/
+.vscode/
+.DS_Store

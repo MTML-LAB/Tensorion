@@ -1,7 +1,8 @@
-from tensorion.config_resolvers import register_resolvers
+"""Tensorion: a drop-in replacement for Muon that also handles tensor layers."""
 
-from . import optimizers
+from . import orthogonalize, unfolding
+from .optimizer import Tensorion
 
-register_resolvers()
+__version__ = "0.1.0"
 
-__all__ = ["optimizers"]
+__all__ = ["Tensorion", "orthogonalize", "unfolding", "__version__"]

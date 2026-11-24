@@ -1,8 +1,0 @@
-_target_: tensorion.projectors.build_single_step_projection
-
-projector:
-  _target_: tensorion.projectors.project_spectral_sphere
-  _partial_: true
-
-mode_strategy: max
-requires_irms: true

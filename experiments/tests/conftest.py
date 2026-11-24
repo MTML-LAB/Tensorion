@@ -1,0 +1,3 @@
+from tensorion_experiments.config_resolvers import register_resolvers
+
+register_resolvers()
