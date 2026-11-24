@@ -7,23 +7,26 @@ on:
 
 jobs:
   optimizer:
-    name: optimizer (Python ${{ matrix.python }}, torch ${{ matrix.torch }})
+    name: optimizer (Python ${{ matrix.python }}, ${{ matrix.torch }})
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
       matrix:
         include:
+          # Oldest supported versions.
           - python: "3.9"
-            torch: "2.1.*"
-          - python: "3.12"
-            torch: "*"
+            torch: "torch==2.1.*"
+          # Latest versions.
+          - python: "3.13"
+            torch: "torch"
     steps:
       - uses: actions/checkout@v7
-      - uses: astral-sh/setup-uv@v10
+      - uses: astral-sh/setup-uv@v10.4.0
         with:
           python-version: ${{ matrix.python }}
+          activate-environment: true
       - name: Install
-        run: uv pip install ".[test]" "torch==${{ matrix.torch }}" --extra-index-url https://download.pytorch.org/whl/cpu
+        run: uv pip install ".[test]" "${{ matrix.torch }}" --extra-index-url https://download.pytorch.org/whl/cpu
       - name: Test
         run: pytest -q
       - name: Quickstart
@@ -33,9 +36,10 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
-      - uses: astral-sh/setup-uv@v10
+      - uses: astral-sh/setup-uv@v10.4.0
         with:
-          python-version: "3.12"
+          python-version: "3.13"
+          activate-environment: true
       - name: Install
         run: uv pip install -e . -r experiments/requirements.txt --extra-index-url https://download.pytorch.org/whl/cpu
       - name: Test
