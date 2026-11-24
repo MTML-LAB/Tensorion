@@ -7,6 +7,15 @@ name = "tensorion"
 version = "0.1.0"
 description = "Muon for tensor layers: a drop-in Muon replacement with configurable tensor unfoldings."
 readme = "README.md"
+license = "MIT"
+license-files = ["LICENSE"]
+authors = [
+    { name = "Vladimir Bogachev" },
+    { name = "Vladimir Aletov" },
+    { name = "Alexander Molozhavenko" },
+    { name = "Sergei Kudriashov" },
+    { name = "Maxim Rakhuba" },
+]
 requires-python = ">=3.12"
 dependencies = ["torch>=2.15", "numpy>=2.5.5"]
 keywords = ["pytorch", "optimizer", "muon", "tensor", "orthogonalization", "deep-learning"]
@@ -23,12 +32,13 @@ test = ["pytest>=9.2"]
 
 [project.urls]
 Repository = "https://github.com/MTML-LAB/Tensorion"
+Paper = "https://arxiv.org/abs/2606.25975"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/tensorion"]
 
 [tool.hatch.build.targets.sdist]
-include = ["src/tensorion", "tests", "examples", "README.md"]
+include = ["src/tensorion", "tests", "examples", "README.md", "LICENSE"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

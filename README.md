@@ -2,7 +2,7 @@
 
 **Muon for tensor layers.** Tensorion is a drop-in replacement for the [Muon](https://kellerjordan.github.io/posts/muon/) optimizer that also works on convolution kernels and other weights with more than two dimensions. You choose how each tensor is unfolded into a matrix before it is orthogonalized.
 
-Paper: [Tensorion: A Tensor-Aware Generalization of the Muon Optimizer](https://arxiv.org/abs/2606.25975).
+Paper: [Tensorion: A Tensor-Aware Generalization of the Muon Optimizer](https://arxiv.org/abs/2606.25975), NeurIPS 2026.
 
 ```python
 from tensorion import Tensorion
@@ -128,20 +128,24 @@ trains a small CNN on random data on the CPU in a few seconds.
 
 ## Reproducing the paper
 
-The training pipeline (Hydra configs, ResNet/ViT models, CIFAR, Food-101 and ImageNet loaders) lives in [`experiments/`](experiments/). The exact code state used for the NeurIPS 2026 paper is tagged `neurips-2026`.
+The training pipeline (Hydra configs, ResNet/ViT models, CIFAR, Food-101 and ImageNet loaders) lives in [`experiments/`](experiments/). The release that accompanies the NeurIPS 2026 paper is tagged `neurips-2026`.
 
 ## Citation
 
 ```bibtex
-@misc{bogachev2026tensorion,
+@inproceedings{bogachev2026tensorion,
   title         = {Tensorion: A Tensor-Aware Generalization of the Muon Optimizer},
   author        = {Bogachev, Vladimir and Aletov, Vladimir and Molozhavenko, Alexander and Kudriashov, Sergei and Rakhuba, Maxim},
+  booktitle     = {Advances in Neural Information Processing Systems},
   year          = {2026},
   eprint        = {2606.25975},
-  archivePrefix = {arXiv},
-  primaryClass  = {cs.LG}
+  archivePrefix = {arXiv}
 }
 ```
+
+## License
+
+[MIT](LICENSE)
 
 ## Development
 
