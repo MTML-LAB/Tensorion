@@ -70,3 +70,14 @@ def test_cans_coefficients_match_paper():
     ]
     ours = [c for a, b, _ in _cans_coefficients(7, 9e-4) for c in (a, b)]
     assert ours == pytest.approx([c for pair in paper for c in pair], rel=1e-9)
+
+
+@pytest.mark.parametrize("name", ["newton_schulz", "polar_express", "cans"])
+@pytest.mark.parametrize("dtype", [torch.bfloat16, torch.float16])
+def test_reduced_precision_is_close_to_float32(name, dtype):
+    G = _matrix(48, 96, cond=30)
+    reference = ORTHOGONALIZERS[name](G)
+    reduced = ORTHOGONALIZERS[name](G.to(dtype))
+    assert reduced.dtype == dtype
+    cosine = torch.nn.functional.cosine_similarity(reference.flatten(), reduced.float().flatten(), dim=0)
+    assert cosine > 0.99

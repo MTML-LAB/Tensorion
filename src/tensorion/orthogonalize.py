@@ -2,7 +2,9 @@
 
 Every orthogonalizer has the signature ``f(G: Tensor, steps: int = <default>) -> Tensor``,
 returns a matrix of the same shape and dtype as ``G`` and never modifies ``G``.
-Iterative methods run in float32 internally. Default step counts use about
+Iterative methods run in the precision of ``G`` (float32, bfloat16 or float16),
+so passing a bfloat16 matrix runs every product in bfloat16, as Muon does.
+Norms are accumulated in float32. Default step counts use about
 15 matrix multiplications for every iterative method.
 
 * ``"newton_schulz"``  -- quintic Newton-Schulz iteration from Muon (default, used in the paper).
@@ -44,11 +46,11 @@ def svd(G: Tensor, steps: int = 0) -> Tensor:
 
 def _odd_polynomial_iteration(G: Tensor, coefficients: Sequence[tuple[float, float, float]], scale: Tensor) -> Tensor:
     """Apply ``X <- a X + b (X X^T) X + c (X X^T)^2 X`` for each ``(a, b, c)``."""
-    X = G.float()
+    X = _working(G)
     transpose = X.shape[0] > X.shape[1]
     if transpose:
         X = X.mT
-    X = X / scale
+    X = X / scale.to(X.dtype)
     for a, b, c in coefficients:
         A = X @ X.mT
         B = b * A + c * (A @ A) if c else b * A
@@ -58,13 +60,25 @@ def _odd_polynomial_iteration(G: Tensor, coefficients: Sequence[tuple[float, flo
     return X.to(G.dtype)
 
 
+_WORKING_DTYPES = (torch.float32, torch.bfloat16, torch.float16)
+
+
+def _working(G: Tensor) -> Tensor:
+    """``G`` itself if its precision can be used for the iteration, else a float32 copy."""
+    return G if G.dtype in _WORKING_DTYPES else G.float()
+
+
+def _norm(G: Tensor) -> Tensor:
+    """Frobenius norm accumulated in float32, without a float32 copy of ``G``."""
+    return torch.linalg.vector_norm(G, dtype=torch.float32)
+
+
 def newton_schulz(G: Tensor, steps: int = 5) -> Tensor:
     """Quintic Newton-Schulz iteration with the coefficients used in Muon.
 
     It converges fast but only roughly: singular values end up in about ``[0.7, 1.2]``.
     """
-    scale = torch.linalg.matrix_norm(G.float()) + _EPS
-    return _odd_polynomial_iteration(G, [(3.4445, -4.7750, 2.0315)] * steps, scale)
+    return _odd_polynomial_iteration(G, [(3.4445, -4.7750, 2.0315)] * steps, _norm(G) + _EPS)
 
 
 # Coefficients from "The Polar Express: Optimal Matrix Sign Methods and Their
@@ -90,8 +104,7 @@ def polar_express(G: Tensor, steps: int = 5) -> Tensor:
     """Polar Express iteration. Steps beyond the tabulated eight reuse the last polynomial."""
     table = _POLAR_EXPRESS_COEFFICIENTS
     coefficients = table[:steps] + table[-1:] * max(0, steps - len(table))
-    scale = torch.linalg.matrix_norm(G.float()) * 1.01 + _EPS
-    return _odd_polynomial_iteration(G, coefficients, scale)
+    return _odd_polynomial_iteration(G, coefficients, _norm(G) * 1.01 + _EPS)
 
 
 @lru_cache(maxsize=None)
@@ -124,11 +137,14 @@ def cans(G: Tensor, steps: int = 7, lower: float = 9e-4) -> Tensor:
     The matrix is normalized by Gelfand's bound ``||(G G^T)^2||_F^(1/4)`` on
     the spectral norm, as in the paper.
     """
-    X = G.float()
+    X = _working(G)
     if X.shape[0] > X.shape[1]:
         X = X.mT
+    # Normalize first so that the fourth power stays in range in a reduced precision.
+    frobenius = _norm(X) + _EPS
+    X = X / frobenius.to(X.dtype)
     A = X @ X.mT
-    scale = torch.linalg.matrix_norm(A @ A) ** (1 / 4) + _EPS
+    scale = (_norm(A @ A) ** (1 / 4)) * frobenius + _EPS
     return _odd_polynomial_iteration(G, _cans_coefficients(steps, lower), scale)
 
 

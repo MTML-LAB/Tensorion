@@ -14,6 +14,10 @@ The unfolding of a layer is one of
   for the current update, recomputed every step. The nuclear norms are
   estimated without an SVD (see :mod:`tensorion.nuclear`), and most splits are
   ruled out by a bound before anything is computed (see :func:`select_online`).
+* ``"online_polar"`` -- the same choice, with the nuclear norm of a candidate
+  computed as ``<M, P>`` for its polar factor ``P`` from the optimizer's own
+  orthogonalizer. The factor of the winner is reused as the update, so
+  only the losing candidates cost extra (see :func:`select_online_polar`).
 * ``"online_exact"`` -- the same choice with exact nuclear norms from SVDs,
   as in the ablation of the paper. Slower.
 * an ``int`` -- the mode-``k`` unfolding of that layer (negative indices allowed).
@@ -31,11 +35,12 @@ import fnmatch
 import itertools
 import math
 from functools import lru_cache, partial
-from typing import Callable, Mapping, Sequence, Union
+from typing import Callable, Mapping, Optional, Sequence, Union
 
 import torch
 
-from .nuclear import nuclear_norm_bounds, nuclear_norm_exact
+from .nuclear import nuclear_norm_bounds, nuclear_norm_exact, nuclear_norm_polar
+from .orthogonalize import newton_schulz
 
 Tensor = torch.Tensor
 RowModes = tuple[int, ...]
@@ -49,6 +54,7 @@ __all__ = [
     "two_way_splits",
     "STRATEGIES",
     "select_online",
+    "select_online_polar",
     "check_unfolding",
     "select",
     "resolve",
@@ -136,7 +142,7 @@ def select_online(x: Tensor, bounds: Callable[[Tensor], tuple[float, float]] = n
     best = candidates[0][0]
     if len(candidates) == 1:
         return best
-    frobenius = torch.linalg.vector_norm(x.float()).item()
+    frobenius = torch.linalg.vector_norm(x, dtype=torch.float32).item()
     best_value = best_lower = -1.0
     for rows, rank in candidates:
         if math.sqrt(rank) * frobenius <= best_lower:
@@ -148,6 +154,52 @@ def select_online(x: Tensor, bounds: Callable[[Tensor], tuple[float, float]] = n
     return best
 
 
+# An approximate orthogonalizer has singular values up to about 1.3, so <M, P> can
+# exceed the nuclear norm by that factor. Dividing by it gives a safe lower value.
+_POLAR_SLACK = 1.3
+
+
+def select_online_polar(
+    x: Tensor,
+    orthogonalize: Callable[[Tensor], Tensor] = newton_schulz,
+    dtype: Optional[torch.dtype] = None,
+) -> tuple[RowModes, Optional[Tensor], Optional[Tensor]]:
+    """The split of ``x`` with the largest ``<M, P>``, where ``P = orthogonalize(M)``.
+
+    With an exact polar factor ``<M, P>`` is the nuclear norm of the
+    matricization ``M``. With an approximate one it is the inner product of the
+    momentum with the update that would be applied, which is what the choice of
+    the unfolding is meant to maximize.
+
+    Returns the row modes, the matricization (in the working precision) and its
+    orthogonalized factor, so that the caller can use the factor as the update.
+    Only matrix products are used. Candidates are pruned by the rank bound as in
+    :func:`select_online`. If there is a single candidate, nothing is computed
+    and the matrices are ``None``.
+    """
+    candidates = _candidates(tuple(x.shape))
+    best = candidates[0][0]
+    if len(candidates) == 1:
+        return best, None, None
+    frobenius = torch.linalg.vector_norm(x, dtype=torch.float32).item()
+    best_value, best_M, best_P = -1.0, None, None
+    for rows, rank in candidates:
+        if math.sqrt(rank) * frobenius <= best_value / _POLAR_SLACK:
+            break
+        M = matricize(x, rows)
+        if dtype is not None:
+            M = M.to(dtype)
+        value, P = nuclear_norm_polar(M, orthogonalize)
+        value = value.item()
+        if value > best_value or best_M is None:
+            best, best_value, best_M, best_P = rows, value, M, P
+    return best, best_M, best_P
+
+
+def _online_polar(x: Tensor) -> RowModes:
+    return select_online_polar(x)[0]
+
+
 def _exact_bounds(M: Tensor) -> tuple[float, float]:
     value = nuclear_norm_exact(M)
     return value, value
@@ -156,6 +208,7 @@ def _exact_bounds(M: Tensor) -> tuple[float, float]:
 STRATEGIES: dict[str, Callable[[Tensor], RowModes]] = {
     "offline": _offline,
     "online": select_online,
+    "online_polar": _online_polar,
     "online_exact": partial(select_online, bounds=_exact_bounds),
 }
 
