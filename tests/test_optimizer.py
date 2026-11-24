@@ -294,3 +294,19 @@ def test_online_every_one_selects_at_every_step(monkeypatch):
 def test_rejects_bad_online_every(value):
     with pytest.raises(ValueError, match="online_every"):
         Tensorion(_net().parameters(), online_every=value)
+
+
+def test_parameters_that_are_vectors_up_to_singleton_axes_use_the_fallback():
+    shapes = {"depthwise": (8, 1, 3, 3), "conv1x1": (16, 8, 1, 1), "pos_embed": (1, 10, 16), "cls": (1, 1, 16), "scale": (16, 1, 1)}
+    params = {name: nn.Parameter(torch.randn(shape)) for name, shape in shapes.items()}
+    opt = Tensorion(list(params.items()))
+    for p in params.values():
+        p.grad = torch.randn_like(p)
+    opt.step()
+    uses_tensorion = {name: "momentum_buffer" in opt.state[p] for name, p in params.items()}
+    assert uses_tensorion == {"depthwise": True, "conv1x1": True, "pos_embed": True, "cls": False, "scale": False}
+
+    with pytest.raises(ValueError, match="cannot get the Tensorion update"):
+        Tensorion([dict(params=[nn.Parameter(torch.zeros(1, 1, 16))], use_muon=True)])
+    with pytest.raises(ValueError, match="match no parameter"):
+        Tensorion([("cls", nn.Parameter(torch.zeros(1, 1, 16)))], unfolding={"cls": 2})
