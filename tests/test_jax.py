@@ -80,7 +80,7 @@ def test_matches_pytorch_for_every_orthogonalizer(orthogonalizer):
         dict(nesterov=True, nuclear=True, orthogonalizer="svd"),
         dict(adjust_lr_fn="original"),
         dict(adjust_lr_fn=None, weight_decay=0.0),
-        dict(min_ndim=3),
+        dict(min_order=3),
         dict(fallback="sgd"),
         dict(fallback="sgd", sgd_momentum=0.0, weight_decay=0.0),
         dict(ns_steps=3, momentum=0.8),
@@ -171,6 +171,13 @@ def test_vectors_up_to_singleton_axes_use_the_fallback_like_pytorch():
     with pytest.raises(ValueError, match="cannot get the Tensorion update"):
         tensorion_jax.scale_by_tensorion().init({"cls": jnp.ones((1, 1, 16))})
     assert tensorion_jax.candidates((64, 1, 3, 3)) == (((0,), 9), ((2,), 3), ((3,), 3))
+
+    # min_order counts axes larger than 1: a 1x1 convolution and (1, n, d) embeddings are matrices.
+    state = tensorion_jax.tensorion(1e-3, min_order=3).init(params)
+    momentum = state.inner_states["tensorion"].inner_state[0].momentum
+    assert sorted(k for k, v in momentum.items() if isinstance(v, jax.Array)) == ["depthwise"]
+    numbers = tensorion_jax.offline_dimension_numbers(params, min_order=3)
+    assert [k for k, v in numbers.items() if v is not None] == ["depthwise"]
 
 
 def test_online_finds_the_best_split_of_a_large_tensor():

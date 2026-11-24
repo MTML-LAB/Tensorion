@@ -39,9 +39,14 @@ class ScaleByTensorionState(NamedTuple):
     choice: Any  # per parameter: index of the split in use (online unfoldings)
 
 
+def _order(shape) -> int:
+    """The number of axes larger than 1."""
+    return sum(n > 1 for n in shape)
+
+
 def _is_unfoldable(shape) -> bool:
-    """Axes of size 1 do not count: without two larger axes the parameter is a vector."""
-    return sum(n > 1 for n in shape) >= 2
+    """Without two axes larger than 1 the parameter is a vector."""
+    return _order(shape) >= 2
 
 
 class _Plan(NamedTuple):
@@ -228,7 +233,7 @@ def tensorion(
     ns_steps: Optional[int] = None,
     adjust_lr_fn: Optional[str] = "match_rms_adamw",
     nuclear: bool = False,
-    min_ndim: int = 2,
+    min_order: int = 2,
     fallback: str = "adamw",
     adamw_b1: float = 0.9,
     adamw_b2: float = 0.95,
@@ -238,22 +243,23 @@ def tensorion(
 ) -> optax.GradientTransformation:
     """Muon for matrix and tensor layers, with a fallback for everything else.
 
-    Parameters with at least ``min_ndim`` dimensions get the Tensorion update
-    (see :func:`scale_by_tensorion`), the others AdamW or SGD. A parameter with
-    fewer than two axes larger than 1, such as a class token ``(1, 1, d)``, is a
-    vector and always uses the fallback. The arguments and their defaults are
+    Parameters of order at least ``min_order`` get the Tensorion update (see
+    :func:`scale_by_tensorion`), the others AdamW or SGD. The order is the number
+    of axes larger than 1: a ``1 x 1`` convolution kernel has order 2, and a
+    class token ``(1, 1, d)`` has order 1 and always uses the fallback. The arguments and their defaults are
     those of the PyTorch ``tensorion.Tensorion``.
 
     Args:
         learning_rate: a scalar or an optax schedule.
         weight_decay: decoupled weight decay for Tensorion and AdamW parameters,
             coupled (L2) for SGD parameters.
-        min_ndim: parameters with at least this many dimensions get the Tensorion update.
+        min_order: parameters of at least this order get the Tensorion update. ``3`` keeps
+            every matrix, including ``1 x 1`` convolutions, on the fallback.
         fallback: ``"adamw"`` or ``"sgd"``.
         adamw_b1, adamw_b2, adamw_eps: AdamW fallback hyperparameters.
         sgd_momentum: SGD fallback momentum.
         param_labels: optional pytree (or function of the parameters) with the label
-            ``"tensorion"`` or ``"fallback"`` per parameter, overriding ``min_ndim``.
+            ``"tensorion"`` or ``"fallback"`` per parameter, overriding ``min_order``.
 
     Example::
 
@@ -292,26 +298,26 @@ def tensorion(
 
         def param_labels(params):
             def label(p):
-                return "tensorion" if jnp.ndim(p) >= min_ndim and _is_unfoldable(jnp.shape(p)) else "fallback"
+                return "tensorion" if _order(jnp.shape(p)) >= max(2, min_order) else "fallback"
 
             return jax.tree.map(label, params)
 
     return optax.multi_transform({"tensorion": tensorion_tx, "fallback": fallback_tx}, param_labels)
 
 
-def offline_dimension_numbers(params: Any, min_ndim: int = 2) -> Any:
+def offline_dimension_numbers(params: Any, min_order: int = 2) -> Any:
     """The offline unfolding of every parameter, as ``optax.contrib.MuonDimensionNumbers``.
 
     This lets the stock optax Muon use the offline Tensorion unfolding::
 
         optax.contrib.muon(1e-3, muon_weight_dimension_numbers=offline_dimension_numbers)
 
-    Parameters with fewer than ``min_ndim`` dimensions get ``None``, which Muon
+    Parameters of order below ``min_order`` get ``None``, which Muon
     hands to its Adam fallback.
     """
 
     def numbers(p):
-        if jnp.ndim(p) < min_ndim or not _is_unfoldable(jnp.shape(p)):
+        if _order(jnp.shape(p)) < max(2, min_order):
             return None
         rows = _unfolding.offline_rows(tuple(jnp.shape(p)))
         columns = tuple(a for a in range(jnp.ndim(p)) if a not in rows)
