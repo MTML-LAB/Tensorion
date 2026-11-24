@@ -10,7 +10,7 @@ lr: 1e-4
 weight_decay: 1e-4
 momentum: 0.95
 nesterov: false
-# offline | online | online_exact, or per layer by parameter name / fnmatch pattern
+# offline | online | online_polar | online_exact, or per layer by parameter name / fnmatch pattern
 # (unmatched layers use offline), for example:
 #   unfolding:
 #     conv1.weight: [0, 1]

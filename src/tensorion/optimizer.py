@@ -3,12 +3,14 @@
 from __future__ import annotations
 
 import math
+from functools import partial
 from typing import Any, Callable, Iterable, Mapping, Optional, Union
 
 import torch
 
 from .orthogonalize import OrthogonalizerSpec, resolve_orthogonalizer
 from . import unfolding as _unfolding
+from .nuclear import nuclear_norm_bounds
 from .unfolding import UnfoldingSpec, matricize, unmatricize
 
 Tensor = torch.Tensor
@@ -59,8 +61,10 @@ class Tensorion(torch.optim.Optimizer):
             mapping from parameter names or ``fnmatch`` patterns to a strategy, an axis or
             a tuple of axes for that layer. Unmatched layers use ``"offline"``. Each layer's
             unfolding is checked against its shape when the optimizer is built.
-            ``"online"`` estimates the nuclear norms without an SVD, ``"online_exact"``
-            uses SVDs. See :mod:`tensorion.unfolding`.
+            ``"online"`` estimates the nuclear norms by Lanczos quadrature,
+            ``"online_polar"`` takes them from the polar factors and reuses the factor
+            of the winner as the update, ``"online_exact"`` uses SVDs.
+            See :mod:`tensorion.unfolding`.
         online_every: with an online unfolding, choose the split again only every this
             many steps and reuse it in between. The momentum changes slowly, so this
             costs little and divides the overhead of the selection. ``1`` selects at
@@ -68,6 +72,10 @@ class Tensorion(torch.optim.Optimizer):
         orthogonalizer: ``"newton_schulz"``, ``"polar_express"``, ``"cans"``, ``"svd"``
             (exact) or a callable ``f(matrix, steps) -> matrix``.
             See :mod:`tensorion.orthogonalize`.
+        matmul_dtype: precision of the large matrix products of the orthogonalizer and of
+            the online selection: ``None`` (the precision of the parameter), or e.g.
+            ``torch.bfloat16`` or ``"bfloat16"`` as in Muon. The momentum and the
+            parameters keep their own precision.
         ns_steps: number of iterations for iterative orthogonalizers. ``None`` uses each
             method's default (Newton-Schulz 5, Polar Express 5, CANS 7, about 15 matmuls each).
         adjust_lr_fn: how the learning rate is scaled by the unfolded shape
@@ -104,6 +112,7 @@ class Tensorion(torch.optim.Optimizer):
         online_every: int = 10,
         orthogonalizer: OrthogonalizerSpec = "newton_schulz",
         ns_steps: Optional[int] = None,
+        matmul_dtype: Optional[Union[torch.dtype, str]] = None,
         adjust_lr_fn: Optional[str] = "match_rms_adamw",
         nuclear: bool = False,
         min_order: int = 2,
@@ -123,6 +132,7 @@ class Tensorion(torch.optim.Optimizer):
             online_every=online_every,
             orthogonalizer=orthogonalizer,
             ns_steps=ns_steps,
+            matmul_dtype=matmul_dtype,
             adjust_lr_fn=adjust_lr_fn,
             nuclear=nuclear,
             min_order=min_order,
@@ -133,7 +143,7 @@ class Tensorion(torch.optim.Optimizer):
             use_tensorion=None,
         )
         self._unfoldings: dict[Tensor, Callable[[Tensor], tuple[int, ...]]] = {}
-        self._online: set[Tensor] = set()
+        self._online: dict[Tensor, str] = {}
         self._matched_keys: dict[int, set[str]] = {}
         super().__init__(params, defaults)
         self._check_all_keys_matched()
@@ -151,6 +161,13 @@ class Tensorion(torch.optim.Optimizer):
         resolve_orthogonalizer(group["orthogonalizer"])
         if group["adjust_lr_fn"] not in _ADJUST_LR_FNS:
             raise ValueError(f"adjust_lr_fn must be one of {list(_ADJUST_LR_FNS)}, got {group['adjust_lr_fn']!r}")
+        dtype = group["matmul_dtype"]
+        if isinstance(dtype, str):
+            if not isinstance(getattr(torch, dtype, None), torch.dtype):
+                raise ValueError(f"matmul_dtype {dtype!r} is not a torch dtype")
+            dtype = group["matmul_dtype"] = getattr(torch, dtype)
+        if dtype is not None and not (isinstance(dtype, torch.dtype) and dtype.is_floating_point):
+            raise ValueError(f"matmul_dtype must be a floating point torch dtype or None, got {dtype!r}")
         if not (isinstance(group["online_every"], int) and group["online_every"] >= 1):
             raise ValueError(f"online_every must be a positive integer, got {group['online_every']!r}")
         if group["fallback"] not in _FALLBACKS:
@@ -182,7 +199,7 @@ class Tensorion(torch.optim.Optimizer):
             if key is not None:
                 matched.add(key)
             if isinstance(layer_spec, str) and layer_spec.startswith("online"):
-                self._online.add(p)
+                self._online[p] = layer_spec
             try:
                 self._unfoldings[p] = _unfolding.resolve(layer_spec, p.ndim)
             except ValueError as e:
@@ -258,19 +275,28 @@ class Tensorion(torch.optim.Optimizer):
         buf.mul_(group["momentum"]).add_(g)
         g = g.add(buf, alpha=group["momentum"]) if group["nesterov"] else buf
 
-        every = group["online_every"]
-        if every > 1 and p in self._online:
-            # Reuse the split chosen at the last selection step.
+        dtype = group["matmul_dtype"]
+        steps = group["ns_steps"]
+        orth = orthogonalize if steps is None else (lambda matrix: orthogonalize(matrix, steps))
+
+        G = U = None
+        if p not in self._online:
+            row_modes = unfold(g)
+        elif group["online_every"] == 1:
+            row_modes, G, U = self._select_online(p, g, unfold, orth, dtype)
+        else:
+            # Choose the split every `online_every` steps and reuse it in between.
             age = state.get("unfolding_age", 0)
-            if age % every == 0:
-                state["row_modes"] = unfold(g)
+            if age % group["online_every"] == 0:
+                state["row_modes"], G, U = self._select_online(p, g, unfold, orth, dtype)
             state["unfolding_age"] = age + 1
             row_modes = state["row_modes"]
-        else:
-            row_modes = unfold(g)
-        G = matricize(g, row_modes)
-        steps = group["ns_steps"]
-        U = orthogonalize(G) if steps is None else orthogonalize(G, steps)
+        if G is None:
+            G = matricize(g, row_modes)
+            if dtype is not None:
+                G = G.to(dtype)
+        if U is None:
+            U = orth(G)
         if group["nuclear"]:
             U = U * (G * U).sum()
         update = unmatricize(U, g.shape, row_modes)
@@ -279,6 +305,15 @@ class Tensorion(torch.optim.Optimizer):
         adjusted_lr = lr * _ADJUST_LR_FNS[group["adjust_lr_fn"]](*G.shape)
         p.mul_(1 - lr * group["weight_decay"])
         p.add_(update, alpha=-adjusted_lr)
+
+    def _select_online(self, p: Tensor, g: Tensor, unfold, orth, dtype):
+        """Row modes of the best split, and its matricization and factor if they were computed."""
+        kind = self._online[p]
+        if kind == "online_polar":
+            return _unfolding.select_online_polar(g, orth, dtype)
+        if kind == "online" and dtype is not None:
+            return _unfolding.select_online(g, bounds=partial(nuclear_norm_bounds, dtype=dtype)), None, None
+        return unfold(g), None, None
 
     def _adamw_step(self, p: Tensor, group: dict[str, Any]) -> None:
         g = p.grad

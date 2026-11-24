@@ -10,6 +10,7 @@ from tensorion.unfolding import (
     resolve,
     select,
     select_online,
+    select_online_polar,
     two_way_splits,
     unmatricize,
 )
@@ -170,7 +171,7 @@ def test_select():
     assert select(spec, "head.weight") == ("online", "*.weight")
     assert select(spec, "head.bias") == ("offline", None)  # unmatched: the default
     assert select("online", "anything") == ("online", None)
-    assert sorted(STRATEGIES) == ["offline", "online", "online_exact"]
+    assert sorted(STRATEGIES) == ["offline", "online", "online_exact", "online_polar"]
 
 
 @pytest.mark.parametrize(
@@ -195,3 +196,54 @@ def test_axes_of_size_one_are_ignored(shape, squeezed):
     assert matrix_shapes(shape) == matrix_shapes(squeezed)
     x = torch.randn(shape)
     assert matricize(x, resolve("offline", x.ndim)(x)).shape == matricize(x.squeeze(), resolve("offline", len(squeezed))(x.squeeze())).shape
+
+
+def test_polar_selection_with_exact_factor_is_the_exact_choice():
+    from tensorion.orthogonalize import svd
+
+    for seed, shape in enumerate([(6, 5, 4), (8, 8, 3, 3), (4, 9, 2, 3)]):
+        x = torch.randn(shape, generator=torch.Generator().manual_seed(seed))
+        best, nuclear = _brute_force(x)
+        rows, M, P = select_online_polar(x, svd)
+        assert nuclear[rows] == pytest.approx(nuclear[best], rel=1e-5)
+        # The returned factor is the polar factor of the chosen matricization.
+        torch.testing.assert_close(M, matricize(x, rows))
+        torch.testing.assert_close(P, svd(M))
+        assert (M * P).sum().item() == pytest.approx(nuclear[rows], rel=1e-4)
+
+
+@pytest.mark.parametrize("low_rank_rows", [(0,), (0, 2), (0, 3)])
+@pytest.mark.parametrize("dtype", [None, torch.bfloat16])
+def test_polar_selection_finds_the_best_split_of_large_tensors(low_rank_rows, dtype):
+    x = _planted((256, 128, 3, 3), low_rank_rows)
+    best, nuclear = _brute_force(x)
+    rows, M, P = select_online_polar(x, dtype=dtype)
+    assert nuclear[rows] >= 0.99 * nuclear[best]
+    assert set(rows) != set(low_rank_rows)
+    assert P.dtype == (dtype or torch.float32)
+
+
+def test_polar_selection_of_a_single_unfolding_costs_nothing():
+    def fail(M):
+        raise AssertionError("nothing to compare")
+
+    assert select_online_polar(torch.randn(128, 64, 1, 1), fail) == ((0,), None, None)
+
+
+@pytest.mark.parametrize("strategy", ["online", "online_polar"])
+@pytest.mark.parametrize("shape", [(256, 128, 3, 3), (16, 8, 3, 3)])
+def test_online_selection_stays_on_the_device(strategy, shape, monkeypatch):
+    """No transfer to the CPU and no factorization that GPU backends lack or run on the CPU."""
+
+    def forbidden(name):
+        def raiser(*args, **kwargs):
+            raise AssertionError(f"{name} must not be used by the online selection")
+
+        return raiser
+
+    monkeypatch.setattr(torch.Tensor, "cpu", forbidden("Tensor.cpu"))
+    monkeypatch.setattr(torch.Tensor, "double", forbidden("Tensor.double"))
+    for name in ["eigh", "qr", "lstsq", "svd", "svdvals"]:
+        monkeypatch.setattr(torch.linalg, name, forbidden(f"linalg.{name}"))
+    x = torch.randn(shape, generator=torch.Generator().manual_seed(0))
+    assert len(STRATEGIES[strategy](x)) in (1, 2)

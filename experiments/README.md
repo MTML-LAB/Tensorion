@@ -46,6 +46,6 @@ pytest -m "not integration"   # fast unit tests
 TENSORION_TEST_DOWNLOAD=1 pytest -m integration   # one short CIFAR-10 epoch
 ```
 
-`benchmarks/online_selection.py` compares the SVD-free online unfolding selection with the exact one (accuracy and time).
+`benchmarks/` holds three scripts: `online_selection.py` (the Lanczos estimate against exact selection, on CPU), `online_variants.py` (all online strategies on a GPU: selection quality, step time, memory) and `offline_vs_online.py` (a short training run per strategy, with time and peak memory per epoch).
 
 `notebooks/` holds exploratory notebooks from development. They import modules by their old paths and are kept for reference only.

@@ -94,3 +94,29 @@ def test_input_is_not_modified():
     copy = M.clone()
     nuclear_norm(M)
     assert torch.equal(M, copy)
+
+
+@pytest.mark.parametrize("name", sorted(_matrices()))
+@pytest.mark.parametrize("dtype", [torch.bfloat16, torch.float16])
+def test_estimate_in_reduced_precision(name, dtype):
+    """Only the large products run in the reduced precision, so the estimate stays close.
+
+    bfloat16 keeps 8 bits, and the rounded products add a few percent to the error of the
+    estimate: on the fastest decaying spectrum here it is 7% off in float32 and 12% in bfloat16.
+    """
+    M = _matrices()[name]
+    tolerance = 0.2 if dtype == torch.bfloat16 else 0.12
+    assert nuclear_norm(M, dtype=dtype) == pytest.approx(nuclear_norm_exact(M), rel=tolerance)
+
+
+def test_polar_factor_and_trace_is_the_nuclear_norm():
+    from tensorion.nuclear import nuclear_norm_polar
+    from tensorion.orthogonalize import polar_express, svd
+
+    M = _matrices()["decay 1/i"]
+    value, P = nuclear_norm_polar(M, svd)
+    assert value.item() == pytest.approx(nuclear_norm_exact(M), rel=1e-4)
+    assert P.shape == M.shape
+    # A converged iterative factor gives nearly the same value, with matrix products only.
+    value, _ = nuclear_norm_polar(M, lambda G: polar_express(G, 10))
+    assert value.item() == pytest.approx(nuclear_norm_exact(M), rel=0.02)

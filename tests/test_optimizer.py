@@ -333,3 +333,50 @@ def test_same_weights_stored_as_conv1x1_or_linear_get_the_same_update():
         results.append(p.detach().reshape(16, 8))
     torch.testing.assert_close(results[0], results[1])
     torch.testing.assert_close(results[0], results[2])
+
+
+def test_online_polar_with_exact_factor_matches_online_exact():
+    a, b = _net(), _net()
+    _train(a, Tensorion(a.parameters(), unfolding="online_exact", orthogonalizer="svd", online_every=1), steps=4)
+    _train(b, Tensorion(b.parameters(), unfolding="online_polar", orthogonalizer="svd", online_every=1), steps=4)
+    for p, q in zip(a.parameters(), b.parameters()):
+        torch.testing.assert_close(p, q, rtol=1e-4, atol=1e-6)
+
+
+@pytest.mark.parametrize("unfolding, expected_calls", [("offline", 1), ("online", 1), ("online_polar", 3)])
+def test_online_polar_reuses_the_factor_of_the_winner(unfolding, expected_calls):
+    """A (6, 5, 4) tensor has 3 unfoldings: polar-trace orthogonalizes each once and nothing more."""
+    from tensorion.orthogonalize import svd
+
+    calls = []
+
+    def counting(G, steps=0):
+        calls.append(tuple(G.shape))
+        return svd(G)
+
+    w = nn.Parameter(torch.randn(6, 5, 4))
+    w.grad = torch.randn_like(w)
+    Tensorion([w], unfolding=unfolding, orthogonalizer=counting, online_every=1).step()
+    assert len(calls) <= expected_calls and len(calls) >= 1
+    if unfolding != "online_polar":
+        assert len(calls) == 1
+
+
+@pytest.mark.parametrize("unfolding", ["offline", "online", "online_polar"])
+@pytest.mark.parametrize("dtype", [torch.bfloat16, "bfloat16", torch.float16])
+def test_matmul_dtype(unfolding, dtype):
+    reference, reduced = _net(), _net()
+    _train(reference, Tensorion(reference.parameters(), unfolding=unfolding, online_every=1), steps=2)
+    opt = Tensorion(reduced.parameters(), unfolding=unfolding, online_every=1, matmul_dtype=dtype)
+    assert isinstance(opt.param_groups[0]["matmul_dtype"], torch.dtype)
+    _train(reduced, opt, steps=2)
+    for p, q in zip(reference.parameters(), reduced.parameters()):
+        assert q.dtype == torch.float32 and torch.isfinite(q).all()
+        assert opt.state[q].get("momentum_buffer", q).dtype == torch.float32
+        torch.testing.assert_close(p, q, rtol=0.05, atol=2e-3)
+
+
+@pytest.mark.parametrize("dtype", ["bfloat", "int32", torch.int64])
+def test_rejects_bad_matmul_dtype(dtype):
+    with pytest.raises(ValueError, match="matmul_dtype"):
+        Tensorion(_net().parameters(), matmul_dtype=dtype)
