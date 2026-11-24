@@ -1,5 +1,5 @@
 [build-system]
-requires = ["hatchling"]
+requires = ["hatchling>=1.33"]
 build-backend = "hatchling.build"
 
 [project]
@@ -7,17 +7,19 @@ name = "tensorion"
 version = "0.1.0"
 description = "Muon for tensor layers: a drop-in Muon replacement with configurable tensor unfoldings."
 readme = "README.md"
-requires-python = ">=3.9"
-dependencies = ["torch>=2.1", "numpy"]
+requires-python = ">=3.12"
+dependencies = ["torch>=2.15", "numpy>=2.5.5"]
 keywords = ["pytorch", "optimizer", "muon", "tensor", "orthogonalization", "deep-learning"]
 classifiers = [
     "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
     "Intended Audience :: Science/Research",
     "Topic :: Scientific/Engineering :: Artificial Intelligence",
 ]
 
 [project.optional-dependencies]
-test = ["pytest>=8"]
+test = ["pytest>=9.2"]
 
 [project.urls]
 Repository = "https://github.com/MTML-LAB/Tensorion"

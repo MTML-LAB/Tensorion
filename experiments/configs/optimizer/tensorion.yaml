@@ -6,8 +6,8 @@ lr: 1e-4
 weight_decay: 1e-4
 momentum: 0.95
 nesterov: false
-# maxrank (= offline) | dual (= online) | min | max | <axis> | [<axes>]
-unfolding: maxrank
+# offline | online | <axis> | [<axes>]
+unfolding: offline
 # newton_schulz | polar_express | cans | svd
 orthogonalizer: newton_schulz
 ns_steps: null  # method default

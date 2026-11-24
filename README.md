@@ -18,7 +18,7 @@ That is the whole setup. Matrices and tensors get the orthogonalized (Muon-style
 pip install git+https://github.com/MTML-LAB/Tensorion.git
 ```
 
-The only dependencies are PyTorch (≥ 2.1) and NumPy, with no upper version bounds, so installing Tensorion never downgrades them. Python ≥ 3.9.
+Requires Python ≥ 3.12. The only dependencies are PyTorch (≥ 2.15) and NumPy (≥ 2.5). There are no upper version bounds, so installing Tensorion never downgrades anything.
 
 ## Switching from Muon
 
@@ -29,7 +29,7 @@ The only dependencies are PyTorch (≥ 2.1) and NumPy, with no upper version bou
 
 For a 2-D weight the update is exactly Muon's. A tensor of shape `(n_0, ..., n_{d-1})` is first unfolded into a matrix. It is orthogonalized like a Muon matrix and then folded back.
 
-The defaults follow Algorithm 1 of the paper: the max-rank ("offline") unfolding, Newton–Schulz orthogonalization, and the AdamW-matched learning rate scaling. To reproduce `torch.optim.Muon` on matrices, use:
+The defaults follow Algorithm 1 of the paper: the offline unfolding, Newton–Schulz orthogonalization, and the AdamW-matched learning rate scaling. To reproduce `torch.optim.Muon` on matrices, use:
 
 ```python
 Tensorion(params, nesterov=True, adjust_lr_fn="original")
@@ -41,25 +41,23 @@ The `unfolding` argument decides which axes of a tensor become rows. The remaini
 
 | `unfolding=` | Rows of the matrix | Example for a conv kernel `(64, 32, 3, 3)` |
 |---|---|---|
-| `"maxrank"` or `"offline"` (default) | the split of axes that allows the largest rank, fixed by the shape | `192 × 96` (axes 0 and 2) |
-| `"dual"` or `"online"` | the split with the largest nuclear norm of the current update, chosen every step | depends on the update |
-| `"min"` | the smallest axis | `3 × 6144` |
-| `"max"` | the largest axis | `64 × 288` |
+| `"offline"` (default) | the split of axes that allows the largest rank, fixed by the shape | `192 × 96` (axes 0 and 2) |
+| `"online"` | the split with the largest nuclear norm of the current update, chosen every step | depends on the update |
 | `k` | axis `k` (negative indices work) | `unfolding=0` gives `64 × 288` |
 | `(i, j, ...)` | the given axes | `unfolding=(0, 1)` gives `2048 × 9` |
 | a function `f(update) -> axis or axes` | whatever you return | |
 
-`"maxrank"` is the paper's main strategy. `"dual"` picks the unfolding that is optimal for the paper's tensor norm, but it costs one SVD per candidate split at every step, so it is the slowest option.
+`"offline"` is the paper's main strategy. `"online"` picks the unfolding that is optimal for the paper's tensor norm, but it costs one SVD per candidate split at every step, so it is the slowest option.
 
 Different layers can use different unfoldings through parameter groups:
 
 ```python
 optimizer = Tensorion(
     [
-        {"params": conv_params, "unfolding": "dual"},
+        {"params": conv_params, "unfolding": "online"},
         {"params": linear_params},  # uses the default below
     ],
-    unfolding="maxrank",
+    unfolding="offline",
 )
 ```
 
@@ -87,7 +85,7 @@ The CANS defaults are the Muon setting of the CANS paper (7 steps, lower singula
 | `weight_decay` | `0.1` | decoupled weight decay (coupled for the SGD fallback) |
 | `momentum` | `0.95` | momentum of the Tensorion update |
 | `nesterov` | `False` | Nesterov momentum |
-| `unfolding` | `"maxrank"` | see [Choosing the unfolding](#choosing-the-unfolding) |
+| `unfolding` | `"offline"` | see [Choosing the unfolding](#choosing-the-unfolding) |
 | `orthogonalizer` | `"newton_schulz"` | see [Choosing the orthogonalizer](#choosing-the-orthogonalizer) |
 | `ns_steps` | `None` | iterations of iterative orthogonalizers. `None` uses each method's default. |
 | `adjust_lr_fn` | `"match_rms_adamw"` | learning rate scaling for an unfolded `rows × cols` update: `"match_rms_adamw"` multiplies by `0.2·√max(rows, cols)` so AdamW learning rates carry over, `"original"` by `√max(1, rows/cols)`, `None` applies no scaling |

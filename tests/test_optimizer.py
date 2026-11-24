@@ -37,7 +37,7 @@ def test_defaults_follow_paper_algorithm():
     w.grad = torch.randn_like(w)
     lr, wd = 0.01, 0.1
     opt = Tensorion([w], lr=lr, weight_decay=wd)
-    assert (opt.defaults["unfolding"], opt.defaults["orthogonalizer"]) == ("maxrank", "newton_schulz")
+    assert (opt.defaults["unfolding"], opt.defaults["orthogonalizer"]) == ("offline", "newton_schulz")
     opt.step()
 
     # (16, 8, 3, 3): rows {0, 2} give a 48 x 24 matricization, the largest possible rank.
@@ -47,15 +47,15 @@ def test_defaults_follow_paper_algorithm():
     torch.testing.assert_close(w.detach(), expected)
 
 
-def test_min_mode_svd_update_matches_reference():
-    """One step on a conv kernel: momentum, smallest-mode unfolding, exact polar factor, AdamW-matched lr."""
+def test_fixed_mode_svd_update_matches_reference():
+    """One step on a conv kernel: momentum, fixed mode-2 unfolding, exact polar factor, AdamW-matched lr."""
     w = nn.Parameter(torch.randn(16, 8, 3, 3))
     w0 = w.detach().clone()
     w.grad = torch.randn_like(w)
     lr, wd = 0.01, 0.1
-    Tensorion([w], lr=lr, weight_decay=wd, unfolding="min", orthogonalizer="svd").step()
+    Tensorion([w], lr=lr, weight_decay=wd, unfolding=2, orthogonalizer="svd").step()
 
-    G = w.grad.permute(2, 0, 1, 3).reshape(3, -1)  # smallest axis is axis 2
+    G = w.grad.permute(2, 0, 1, 3).reshape(3, -1)
     U, _, Vh = torch.linalg.svd(G, full_matrices=False)
     update = (U @ Vh).reshape(3, 16, 8, 3).permute(1, 2, 0, 3)
     expected = w0 * (1 - lr * wd) - lr * 0.2 * math.sqrt(G.shape[1]) * update
@@ -142,11 +142,11 @@ def test_sgd_fallback():
 def test_per_group_unfolding():
     model = _net()
     groups = [
-        dict(params=list(model[0].parameters()), unfolding="maxrank"),
+        dict(params=list(model[0].parameters()), unfolding="online"),
         dict(params=list(model[2].parameters()) + list(model[4].parameters())),
     ]
-    opt = Tensorion(groups, unfolding="min")
-    assert [g["unfolding"] for g in opt.param_groups] == ["maxrank", "min"]
+    opt = Tensorion(groups, unfolding=0)
+    assert [g["unfolding"] for g in opt.param_groups] == ["online", 0]
     _train(model, opt, steps=1)
 
 

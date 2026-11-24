@@ -45,11 +45,10 @@ class Tensorion(torch.optim.Optimizer):
             coupled (L2) for SGD parameters.
         momentum: momentum of the Tensorion update.
         nesterov: use Nesterov momentum for the Tensorion update.
-        unfolding: how a tensor is turned into a matrix: ``"maxrank"`` (alias ``"offline"``,
-            the split of axes with the largest rank, fixed by the shape), ``"dual"``
-            (alias ``"online"``, the split with the largest nuclear norm, chosen every step),
-            ``"min"`` (smallest axis), ``"max"`` (largest axis), an axis index, a tuple of
-            axes used as rows, or a callable ``f(update) -> axis | axes``.
+        unfolding: how a tensor is turned into a matrix: ``"offline"`` (the split of axes
+            with the largest rank, fixed by the shape), ``"online"`` (the split with the
+            largest nuclear norm, chosen every step), an axis index, a tuple of axes used
+            as rows, or a callable ``f(update) -> axis | axes``.
             See :mod:`tensorion.unfolding`.
         orthogonalizer: ``"newton_schulz"``, ``"polar_express"``, ``"cans"``, ``"svd"``
             (exact) or a callable ``f(matrix, steps) -> matrix``.
@@ -79,7 +78,7 @@ class Tensorion(torch.optim.Optimizer):
         weight_decay: float = 0.1,
         momentum: float = 0.95,
         nesterov: bool = False,
-        unfolding: UnfoldingSpec = "maxrank",
+        unfolding: UnfoldingSpec = "offline",
         orthogonalizer: OrthogonalizerSpec = "newton_schulz",
         ns_steps: Optional[int] = None,
         adjust_lr_fn: Optional[str] = "match_rms_adamw",

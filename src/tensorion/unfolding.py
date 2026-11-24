@@ -6,18 +6,17 @@ the remaining axes into columns. The mode-``k`` unfolding is the special case
 ``row_modes = (k,)``.
 
 An *unfolding strategy* decides which row modes to use for a given update
-tensor. Built-in strategies:
+tensor. The two strategies of the paper:
 
-* ``"maxrank"`` (alias ``"offline"``) -- the split of the axes into two groups
-  whose matricization has the largest possible rank, i.e. maximizes
-  ``min(rows, cols)``. It depends only on the shape. This is the default and
-  the primary strategy of the paper.
-* ``"dual"`` (alias ``"online"``) -- the split whose matricization has the
-  largest nuclear norm for the current update. It is recomputed every step and
-  costs one SVD per split.
-* ``"min"``     -- unfold along the smallest axis.
-* ``"max"``     -- unfold along the largest axis.
-* ``int``       -- a fixed mode-``k`` unfolding (negative indices allowed).
+* ``"offline"`` -- the split of the axes into two groups whose matricization
+  has the largest possible rank, i.e. maximizes ``min(rows, cols)``. It depends
+  only on the shape, so it is fixed per layer. This is the default.
+* ``"online"``  -- the split whose matricization has the largest nuclear norm
+  for the current update. It is recomputed every step and costs one SVD per split.
+
+Or a fixed unfolding:
+
+* ``int``       -- the mode-``k`` unfolding (negative indices allowed).
 * ``tuple`` / ``list`` of ints -- a fixed set of row modes.
 * a callable ``f(update: Tensor) -> int | Sequence[int]``.
 """
@@ -80,16 +79,8 @@ def two_way_splits(ndim: int) -> list[RowModes]:
     return splits
 
 
-def _min_mode(x: Tensor) -> RowModes:
-    return (min(range(x.ndim), key=lambda m: x.shape[m]),)
-
-
-def _max_mode(x: Tensor) -> RowModes:
-    return (max(range(x.ndim), key=lambda m: x.shape[m]),)
-
-
 @lru_cache(maxsize=None)
-def _maxrank_for_shape(shape: tuple[int, ...]) -> RowModes:
+def _offline_for_shape(shape: tuple[int, ...]) -> RowModes:
     numel = math.prod(shape)
 
     def rank_bound(rows: RowModes) -> int:
@@ -99,11 +90,11 @@ def _maxrank_for_shape(shape: tuple[int, ...]) -> RowModes:
     return max(two_way_splits(len(shape)), key=rank_bound)
 
 
-def _maxrank(x: Tensor) -> RowModes:
-    return _maxrank_for_shape(tuple(x.shape))
+def _offline(x: Tensor) -> RowModes:
+    return _offline_for_shape(tuple(x.shape))
 
 
-def _dual(x: Tensor) -> RowModes:
+def _online(x: Tensor) -> RowModes:
     def nuclear_norm(rows: RowModes) -> float:
         return torch.linalg.svdvals(matricize(x, rows).float()).sum().item()
 
@@ -111,12 +102,8 @@ def _dual(x: Tensor) -> RowModes:
 
 
 STRATEGIES: dict[str, Callable[[Tensor], RowModes]] = {
-    "min": _min_mode,
-    "max": _max_mode,
-    "maxrank": _maxrank,
-    "dual": _dual,
-    "offline": _maxrank,
-    "online": _dual,
+    "offline": _offline,
+    "online": _online,
 }
 
 
