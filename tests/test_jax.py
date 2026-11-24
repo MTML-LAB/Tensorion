@@ -152,11 +152,24 @@ def test_nuclear_norm_estimate(matrix):
     assert (float(lower) + float(upper)) / 2 == pytest.approx(exact, rel=0.1, abs=1e-6)
 
 
-def test_exact_nuclear_norm_of_a_very_wide_matrix_fits_in_memory():
-    """A 3 x N unfolding must not allocate an N x N matrix."""
+@pytest.mark.parametrize("function", ["nuclear_norm_bounds", "nuclear_norm_exact"])
+def test_nuclear_norm_of_a_very_wide_matrix_fits_in_memory(function):
+    """A 3 x N unfolding must not allocate an N x N matrix, with the Gram matrix or the SVD."""
     M = np.random.default_rng(0).standard_normal((3, 400_000)).astype(np.float32)
-    lower, upper = jax.jit(tensorion_jax.nuclear_norm_bounds)(jnp.asarray(M))
+    lower, upper = jax.jit(getattr(tensorion_jax, function))(jnp.asarray(M))
     assert float(lower) == float(upper) == pytest.approx(np.linalg.svd(M, compute_uv=False).sum(), rel=1e-4)
+
+
+def test_vectors_up_to_singleton_axes_use_the_fallback_like_pytorch():
+    shapes = {"depthwise": (8, 1, 3, 3), "conv1x1": (16, 8, 1, 1), "pos_embed": (1, 10, 16), "cls": (1, 1, 16), "scale": (16, 1, 1)}
+    params = {name: jnp.ones(shape) for name, shape in shapes.items()}
+    state = tensorion_jax.tensorion(1e-3).init(params)
+    momentum = state.inner_states["tensorion"].inner_state[0].momentum
+    assert sorted(k for k, v in momentum.items() if isinstance(v, jax.Array)) == ["conv1x1", "depthwise", "pos_embed"]
+    assert tensorion_jax.offline_dimension_numbers(params)["cls"] is None
+    with pytest.raises(ValueError, match="cannot get the Tensorion update"):
+        tensorion_jax.scale_by_tensorion().init({"cls": jnp.ones((1, 1, 16))})
+    assert tensorion_jax.candidates((64, 1, 3, 3)) == (((0,), 9), ((2,), 3), ((3,), 3))
 
 
 def test_online_finds_the_best_split_of_a_large_tensor():

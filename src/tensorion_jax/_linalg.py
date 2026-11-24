@@ -125,8 +125,8 @@ def resolve_orthogonalizer(spec: Union[str, Orthogonalizer]) -> Orthogonalizer:
 
 # --- nuclear norm ------------------------------------------------------------
 
-# Below this size of the smaller side an exact SVD is cheaper than the estimate.
-_EXACT_BELOW = 128
+# Below this size of the smaller side the Gram matrix is cheaper than the estimate.
+_GRAM_BELOW = 128
 
 
 def nuclear_norm_exact(M: Array) -> tuple[Array, Array]:
@@ -154,20 +154,31 @@ def _sqrt_quadrature(diagonal: Array, off_diagonal: Array) -> Array:
     return (eigenvectors[:, 0, :] ** 2 * jnp.sqrt(jnp.clip(eigenvalues, 0))).sum(-1)
 
 
+def _nuclear_norm_gram(M: Array) -> tuple[Array, Array]:
+    """Nuclear norm of a wide matrix from its small Gram matrix ``M M^T``.
+
+    The singular values of ``M`` are the square roots of the eigenvalues of
+    ``M M^T``, which is only ``rows x rows``: one matrix product and a small
+    eigenvalue problem, with no factorization of ``M`` itself.
+    """
+    value = jnp.sqrt(jnp.clip(jnp.linalg.eigvalsh(M @ M.T), 0)).sum()
+    return value, value
+
+
 def nuclear_norm_bounds(M: Array, probes: int = 16, sketch: int = 16, steps: int = 8) -> tuple[Array, Array]:
     """Estimated lower and upper values of the nuclear norm of ``M``, without an SVD.
 
     ``tr(sqrt(M M^T))`` by stochastic Lanczos quadrature: the Gauss rule
     overestimates and the Gauss-Radau rule with a node at 0 underestimates, and
     Hutch++ deflation handles a sketched dominant subspace without probes.
-    See :mod:`tensorion.nuclear` for the details. Matrices whose smaller side
-    is below 128 are handled exactly.
+    See :mod:`tensorion.nuclear` for the details. For matrices whose smaller
+    side is below 128 the value is computed from the small Gram matrix instead.
     """
     if M.shape[0] > M.shape[1]:
         M = M.T
     rows = M.shape[0]
-    if rows < max(_EXACT_BELOW, 2 * steps, sketch + 1):
-        return nuclear_norm_exact(M)
+    if rows < max(_GRAM_BELOW, 2 * steps, sketch + 1):
+        return _nuclear_norm_gram(M)
     scale = jnp.linalg.norm(M)
     M = M / jnp.where(scale > 0, scale, 1.0)
 

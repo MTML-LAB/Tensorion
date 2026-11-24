@@ -39,6 +39,11 @@ class ScaleByTensorionState(NamedTuple):
     choice: Any  # per parameter: index of the split in use (online unfoldings)
 
 
+def _is_unfoldable(shape) -> bool:
+    """Axes of size 1 do not count: without two larger axes the parameter is a vector."""
+    return sum(n > 1 for n in shape) >= 2
+
+
 class _Plan(NamedTuple):
     """How one parameter is unfolded: the splits to choose from and how to choose."""
 
@@ -59,10 +64,10 @@ def _plans(tree: Any, unfolding: UnfoldingSpec) -> tuple[list[_Plan], Any]:
     for key_path, leaf in leaves:
         path = _path(key_path)
         shape = tuple(leaf.shape)
-        if len(shape) < 2:
+        if not _is_unfoldable(shape):
             raise ValueError(
                 f"Parameter {path!r} of shape {shape} cannot get the Tensorion update. "
-                "Only parameters with 2 or more dimensions can."
+                "Only parameters with 2 or more axes larger than 1 can."
             )
         spec, key = _unfolding.select(unfolding, path)
         if key is not None:
@@ -130,8 +135,9 @@ def scale_by_tensorion(
 ) -> optax.GradientTransformation:
     """Replace every update by the orthogonalized, folded-back momentum.
 
-    Every parameter this transformation sees must have at least 2 dimensions.
-    Use :func:`tensorion` to route the other parameters to a fallback optimizer.
+    Every parameter this transformation sees must have at least 2 axes larger
+    than 1 (axes of size 1 are ignored when a tensor is unfolded). Use
+    :func:`tensorion` to route the other parameters to a fallback optimizer.
 
     Args:
         momentum: momentum coefficient.
@@ -233,8 +239,10 @@ def tensorion(
     """Muon for matrix and tensor layers, with a fallback for everything else.
 
     Parameters with at least ``min_ndim`` dimensions get the Tensorion update
-    (see :func:`scale_by_tensorion`), the others AdamW or SGD. The arguments
-    and their defaults are those of the PyTorch ``tensorion.Tensorion``.
+    (see :func:`scale_by_tensorion`), the others AdamW or SGD. A parameter with
+    fewer than two axes larger than 1, such as a class token ``(1, 1, d)``, is a
+    vector and always uses the fallback. The arguments and their defaults are
+    those of the PyTorch ``tensorion.Tensorion``.
 
     Args:
         learning_rate: a scalar or an optax schedule.
@@ -283,7 +291,10 @@ def tensorion(
     if param_labels is None:
 
         def param_labels(params):
-            return jax.tree.map(lambda p: "tensorion" if jnp.ndim(p) >= min_ndim else "fallback", params)
+            def label(p):
+                return "tensorion" if jnp.ndim(p) >= min_ndim and _is_unfoldable(jnp.shape(p)) else "fallback"
+
+            return jax.tree.map(label, params)
 
     return optax.multi_transform({"tensorion": tensorion_tx, "fallback": fallback_tx}, param_labels)
 
@@ -300,7 +311,7 @@ def offline_dimension_numbers(params: Any, min_ndim: int = 2) -> Any:
     """
 
     def numbers(p):
-        if jnp.ndim(p) < max(min_ndim, 2):
+        if jnp.ndim(p) < min_ndim or not _is_unfoldable(jnp.shape(p)):
             return None
         rows = _unfolding.offline_rows(tuple(jnp.shape(p)))
         columns = tuple(a for a in range(jnp.ndim(p)) if a not in rows)
