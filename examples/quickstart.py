@@ -20,7 +20,7 @@ model = nn.Sequential(
 )
 
 # Conv kernels and the linear layer get the Tensorion update, biases get AdamW.
-optimizer = Tensorion(model.parameters(), lr=1e-2, unfolding="maxrank")
+optimizer = Tensorion(model.parameters(), lr=1e-2)
 
 x, y = torch.randn(256, 3, 16, 16), torch.randint(0, 10, (256,))
 for step in range(50):

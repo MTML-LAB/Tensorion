@@ -1,7 +1,7 @@
 import pytest
 import torch
 
-from tensorion.orthogonalize import ORTHOGONALIZERS, resolve_orthogonalizer
+from tensorion.orthogonalize import ORTHOGONALIZERS, _cans_coefficients, resolve_orthogonalizer
 
 
 def _matrix(rows, cols, cond, seed=0):
@@ -55,3 +55,18 @@ def test_resolve_orthogonalizer():
     assert resolve_orthogonalizer(custom) is custom
     with pytest.raises(ValueError, match="Unknown orthogonalizer"):
         resolve_orthogonalizer("qr")
+
+
+def test_cans_coefficients_match_paper():
+    """Degree-3 CANS composition for Muon, 7 steps (Grishina et al., 2025, Appendix J)."""
+    paper = [
+        (5.181702879894027, -5.177039351076183),
+        (2.5854225645668487, -0.6478627820075661),
+        (2.565592012027513, -0.6452645701961278),
+        (2.5162233474315263, -0.6387826202434335),
+        (2.401068707564606, -0.6235851252726741),
+        (2.1708447617901196, -0.5928497805346629),
+        (1.8394377168195162, -0.5476683622291173),
+    ]
+    ours = [c for a, b, _ in _cans_coefficients(7, 9e-4) for c in (a, b)]
+    assert ours == pytest.approx([c for pair in paper for c in pair], rel=1e-9)

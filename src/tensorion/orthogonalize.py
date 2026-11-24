@@ -1,14 +1,15 @@
 """Approximations of the polar factor ``U V^T`` of a matrix ``G = U S V^T``.
 
-Every orthogonalizer has the signature ``f(G: Tensor, steps: int) -> Tensor``,
+Every orthogonalizer has the signature ``f(G: Tensor, steps: int = <default>) -> Tensor``,
 returns a matrix of the same shape and dtype as ``G`` and never modifies ``G``.
-Iterative methods run in float32 internally.
+Iterative methods run in float32 internally. Default step counts use about
+15 matrix multiplications for every iterative method.
 
-* ``"svd"``            -- exact, via ``torch.linalg.svd`` (default, used in the paper).
-* ``"newton_schulz"``  -- quintic Newton-Schulz iteration from Muon.
-* ``"polar_express"``  -- Polar Express (Amsel et al., 2025).
-* ``"cans"``           -- CANS, Chebyshev-accelerated Newton-Schulz with
-  degree-3 polynomials (Grishina et al., 2025).
+* ``"newton_schulz"``  -- quintic Newton-Schulz iteration from Muon (default, used in the paper).
+* ``"svd"``            -- exact, via ``torch.linalg.svd``.
+* ``"polar_express"``  -- Polar Express (Amsel et al., 2025, arXiv:2505.16932).
+* ``"cans"``           -- CANS, Chebyshev-accelerated Newton-Schulz with degree-3
+  polynomials (Grishina, Smirnov and Rakhuba, 2025, arXiv:2506.10935).
 """
 
 from __future__ import annotations
@@ -113,17 +114,21 @@ def _cans_coefficients(steps: int, lower: float) -> tuple[tuple[float, float, fl
     return tuple(coefficients)
 
 
-def cans(G: Tensor, steps: int = 5, lower: float = 1e-3) -> Tensor:
-    """CANS iteration with degree-3 polynomials.
+def cans(G: Tensor, steps: int = 7, lower: float = 9e-4) -> Tensor:
+    """CANS iteration with degree-3 polynomials (2 matmuls per step).
 
     ``lower`` is the assumed lower bound on the normalized singular values.
-    The matrix is normalized by ``||G G^T G||_F^(1/3)``, which upper-bounds the
-    spectral norm more tightly than the Frobenius norm.
+    The defaults are the Muon setting of the CANS paper: 7 steps, which map
+    singular values in ``[9e-4, 1]`` into about ``[0.7, 1.3]``. Use more steps
+    for a full orthogonalization (10 steps converge for ``lower=1e-3``).
+    The matrix is normalized by Gelfand's bound ``||(G G^T)^2||_F^(1/4)`` on
+    the spectral norm, as in the paper.
     """
     X = G.float()
     if X.shape[0] > X.shape[1]:
         X = X.mT
-    scale = torch.linalg.matrix_norm((X @ X.mT) @ X) ** (1 / 3) + _EPS
+    A = X @ X.mT
+    scale = torch.linalg.matrix_norm(A @ A) ** (1 / 4) + _EPS
     return _odd_polynomial_iteration(G, _cans_coefficients(steps, lower), scale)
 
 

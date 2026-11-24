@@ -34,6 +34,7 @@ def test_builtin_strategies():
     assert resolve_unfolding("max")(x) == (0,)
     # {0, 2} gives a 192 x 96 matrix, the largest possible rank (ties keep the first split).
     assert resolve_unfolding("maxrank")(x) == (0, 2)
+    assert resolve_unfolding("offline")(x) == (0, 2)
 
 
 def test_dual_picks_largest_nuclear_norm():

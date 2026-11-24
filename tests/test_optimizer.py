@@ -7,7 +7,7 @@ import torch
 from torch import nn
 
 from tensorion import Tensorion
-from tensorion.orthogonalize import ORTHOGONALIZERS
+from tensorion.orthogonalize import ORTHOGONALIZERS, newton_schulz
 from tensorion.unfolding import STRATEGIES
 
 
@@ -30,13 +30,30 @@ def _train(model, optimizer, steps=3):
         optimizer.step()
 
 
-def test_default_update_matches_reference():
+def test_defaults_follow_paper_algorithm():
+    """Algorithm 1 of the paper: offline (max-rank) unfolding fixed by the shape, Newton-Schulz."""
+    w = nn.Parameter(torch.randn(16, 8, 3, 3))
+    w0 = w.detach().clone()
+    w.grad = torch.randn_like(w)
+    lr, wd = 0.01, 0.1
+    opt = Tensorion([w], lr=lr, weight_decay=wd)
+    assert (opt.defaults["unfolding"], opt.defaults["orthogonalizer"]) == ("maxrank", "newton_schulz")
+    opt.step()
+
+    # (16, 8, 3, 3): rows {0, 2} give a 48 x 24 matricization, the largest possible rank.
+    G = w.grad.permute(0, 2, 1, 3).reshape(48, 24)
+    update = newton_schulz(G).reshape(16, 3, 8, 3).permute(0, 2, 1, 3)
+    expected = w0 * (1 - lr * wd) - lr * 0.2 * math.sqrt(48) * update
+    torch.testing.assert_close(w.detach(), expected)
+
+
+def test_min_mode_svd_update_matches_reference():
     """One step on a conv kernel: momentum, smallest-mode unfolding, exact polar factor, AdamW-matched lr."""
     w = nn.Parameter(torch.randn(16, 8, 3, 3))
     w0 = w.detach().clone()
     w.grad = torch.randn_like(w)
     lr, wd = 0.01, 0.1
-    Tensorion([w], lr=lr, weight_decay=wd).step()
+    Tensorion([w], lr=lr, weight_decay=wd, unfolding="min", orthogonalizer="svd").step()
 
     G = w.grad.permute(2, 0, 1, 3).reshape(3, -1)  # smallest axis is axis 2
     U, _, Vh = torch.linalg.svd(G, full_matrices=False)
@@ -49,7 +66,7 @@ def test_matrix_update_is_muon():
     w = nn.Parameter(torch.randn(12, 20))
     w0 = w.detach().clone()
     w.grad = torch.randn_like(w)
-    Tensorion([w], lr=0.1, weight_decay=0.0, adjust_lr_fn=None).step()
+    Tensorion([w], lr=0.1, weight_decay=0.0, adjust_lr_fn=None, orthogonalizer="svd").step()
     U, _, Vh = torch.linalg.svd(w.grad, full_matrices=False)
     torch.testing.assert_close(w.detach(), w0 - 0.1 * U @ Vh)
 

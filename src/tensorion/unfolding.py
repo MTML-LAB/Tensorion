@@ -8,12 +8,15 @@ the remaining axes into columns. The mode-``k`` unfolding is the special case
 An *unfolding strategy* decides which row modes to use for a given update
 tensor. Built-in strategies:
 
-* ``"min"``     -- unfold along the smallest axis (default, used in the paper).
+* ``"maxrank"`` (alias ``"offline"``) -- the split of the axes into two groups
+  whose matricization has the largest possible rank, i.e. maximizes
+  ``min(rows, cols)``. It depends only on the shape. This is the default and
+  the primary strategy of the paper.
+* ``"dual"`` (alias ``"online"``) -- the split whose matricization has the
+  largest nuclear norm for the current update. It is recomputed every step and
+  costs one SVD per split.
+* ``"min"``     -- unfold along the smallest axis.
 * ``"max"``     -- unfold along the largest axis.
-* ``"maxrank"`` -- the split of the axes into two groups whose matricization
-  has the largest possible rank, i.e. maximizes ``min(rows, cols)``.
-* ``"dual"``    -- the split whose matricization has the largest nuclear norm
-  for the current update (recomputed every step, costs one SVD per split).
 * ``int``       -- a fixed mode-``k`` unfolding (negative indices allowed).
 * ``tuple`` / ``list`` of ints -- a fixed set of row modes.
 * a callable ``f(update: Tensor) -> int | Sequence[int]``.
@@ -23,6 +26,7 @@ from __future__ import annotations
 
 import itertools
 import math
+from functools import lru_cache
 from typing import Callable, Sequence, Union
 
 import torch
@@ -84,14 +88,19 @@ def _max_mode(x: Tensor) -> RowModes:
     return (max(range(x.ndim), key=lambda m: x.shape[m]),)
 
 
-def _maxrank(x: Tensor) -> RowModes:
-    numel = x.numel()
+@lru_cache(maxsize=None)
+def _maxrank_for_shape(shape: tuple[int, ...]) -> RowModes:
+    numel = math.prod(shape)
 
     def rank_bound(rows: RowModes) -> int:
-        r = math.prod(x.shape[m] for m in rows)
+        r = math.prod(shape[m] for m in rows)
         return min(r, numel // r)
 
-    return max(two_way_splits(x.ndim), key=rank_bound)
+    return max(two_way_splits(len(shape)), key=rank_bound)
+
+
+def _maxrank(x: Tensor) -> RowModes:
+    return _maxrank_for_shape(tuple(x.shape))
 
 
 def _dual(x: Tensor) -> RowModes:
@@ -106,6 +115,8 @@ STRATEGIES: dict[str, Callable[[Tensor], RowModes]] = {
     "max": _max_mode,
     "maxrank": _maxrank,
     "dual": _dual,
+    "offline": _maxrank,
+    "online": _dual,
 }
 
 
