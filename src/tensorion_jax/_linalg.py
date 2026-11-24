@@ -131,7 +131,9 @@ _EXACT_BELOW = 128
 
 def nuclear_norm_exact(M: Array) -> tuple[Array, Array]:
     """Nuclear norm by a full SVD, returned as a (lower, upper) pair."""
-    value = jnp.linalg.svd(M, compute_uv=False).sum()
+    # full_matrices=False matters even without U and V: the default would allocate a
+    # square matrix of the larger side, which is huge for a 3 x N unfolding.
+    value = jnp.linalg.svd(M, full_matrices=False, compute_uv=False).sum()
     return value, value
 
 

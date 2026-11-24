@@ -152,6 +152,13 @@ def test_nuclear_norm_estimate(matrix):
     assert (float(lower) + float(upper)) / 2 == pytest.approx(exact, rel=0.1, abs=1e-6)
 
 
+def test_exact_nuclear_norm_of_a_very_wide_matrix_fits_in_memory():
+    """A 3 x N unfolding must not allocate an N x N matrix."""
+    M = np.random.default_rng(0).standard_normal((3, 400_000)).astype(np.float32)
+    lower, upper = jax.jit(tensorion_jax.nuclear_norm_bounds)(jnp.asarray(M))
+    assert float(lower) == float(upper) == pytest.approx(np.linalg.svd(M, compute_uv=False).sum(), rel=1e-4)
+
+
 def test_online_finds_the_best_split_of_a_large_tensor():
     """Large enough for the SVD-free estimate: low rank in split (0, 2), so another one must win."""
     g = torch.Generator().manual_seed(0)
