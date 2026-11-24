@@ -28,22 +28,24 @@ _FALLBACKS = ("adamw", "sgd")
 class Tensorion(torch.optim.Optimizer):
     r"""Muon for matrix *and* tensor layers.
 
-    For every parameter with at least ``min_ndim`` dimensions, Tensorion keeps
+    For every parameter of order at least ``min_order``, Tensorion keeps
     a momentum buffer, unfolds it into a matrix (see ``unfolding``), replaces
     that matrix with its polar factor :math:`UV^\top` (see ``orthogonalizer``),
     folds it back and takes a step. For a 2-D weight this is exactly Muon.
     All other parameters (biases, norms, and anything you route there) are
     updated by a fallback optimizer, AdamW by default.
 
-    Axes of size 1 are ignored when a tensor is unfolded. A parameter with fewer
-    than two axes larger than 1, such as a class token of shape ``(1, 1, d)``,
-    is a vector and always goes to the fallback optimizer.
+    The order of a parameter is the number of its axes larger than 1. Axes of
+    size 1 carry no information and are ignored throughout: a ``1 x 1``
+    convolution kernel has order 2 and gets exactly the Muon update of the
+    matrix it is, and a class token of shape ``(1, 1, d)`` has order 1 and
+    always goes to the fallback optimizer.
 
     Args:
         params: parameters or parameter groups, as for any ``torch.optim`` optimizer.
             Pass ``model.named_parameters()`` to set the unfolding per layer by name.
             A group may set ``use_muon`` (or ``use_tensorion``) to ``True``/``False`` to
-            force the update rule; otherwise it is chosen by ``p.ndim >= min_ndim``.
+            force the update rule; otherwise it is chosen by the order and ``min_order``.
             Any other argument below can also be overridden per group. Groups written
             for Muon's ``MuonWithAuxAdam`` (keys ``use_muon``, ``betas``, ``eps``) work as is.
         lr: learning rate.
@@ -73,8 +75,9 @@ class Tensorion(torch.optim.Optimizer):
             ``"original"`` (``sqrt(max(1, rows / cols))``) or ``None`` (no scaling).
         nuclear: scale the update by :math:`\langle G, UV^\top\rangle`, the nuclear norm
             of the unfolded update.
-        min_ndim: parameters with at least this many dimensions get the Tensorion update.
-            Use ``3`` to keep 2-D layers on the fallback optimizer.
+        min_order: parameters of at least this order (number of axes larger than 1) get
+            the Tensorion update. The default ``2`` covers matrices and tensors. ``3`` keeps
+            every matrix, including ``1 x 1`` convolutions, on the fallback optimizer.
         fallback: ``"adamw"`` or ``"sgd"``, the update for all other parameters.
         adamw_betas, adamw_eps: AdamW hyperparameters for the fallback.
         sgd_momentum: SGD momentum for the fallback.
@@ -103,7 +106,7 @@ class Tensorion(torch.optim.Optimizer):
         ns_steps: Optional[int] = None,
         adjust_lr_fn: Optional[str] = "match_rms_adamw",
         nuclear: bool = False,
-        min_ndim: int = 2,
+        min_order: int = 2,
         fallback: str = "adamw",
         adamw_betas: tuple[float, float] = (0.9, 0.95),
         adamw_eps: float = 1e-8,
@@ -122,7 +125,7 @@ class Tensorion(torch.optim.Optimizer):
             ns_steps=ns_steps,
             adjust_lr_fn=adjust_lr_fn,
             nuclear=nuclear,
-            min_ndim=min_ndim,
+            min_order=min_order,
             fallback=fallback,
             adamw_betas=tuple(adamw_betas),
             adamw_eps=adamw_eps,
@@ -193,7 +196,7 @@ class Tensorion(torch.optim.Optimizer):
                 if unmatched:
                     raise ValueError(
                         f"unfolding keys {unmatched} match no parameter that gets the Tensorion update "
-                        "(check the names in model.named_parameters() and min_ndim)."
+                        "(check the names in model.named_parameters() and min_order)."
                     )
 
     def load_state_dict(self, state_dict: dict[str, Any]) -> None:
@@ -205,15 +208,19 @@ class Tensorion(torch.optim.Optimizer):
             self._resolve_unfoldings(group)
 
     @staticmethod
-    def _is_unfoldable(p: Tensor) -> bool:
-        """Axes of size 1 do not count: without two larger axes the parameter is a vector."""
-        return sum(n > 1 for n in p.shape) >= 2
+    def _order(p: Tensor) -> int:
+        """The number of axes larger than 1."""
+        return sum(n > 1 for n in p.shape)
+
+    @classmethod
+    def _is_unfoldable(cls, p: Tensor) -> bool:
+        return cls._order(p) >= 2
 
     @classmethod
     def _uses_tensorion(cls, p: Tensor, group: dict[str, Any]) -> bool:
         flag = group["use_tensorion"]
         if flag is None:
-            return p.ndim >= group["min_ndim"] and cls._is_unfoldable(p)
+            return cls._order(p) >= max(2, group["min_order"])
         return bool(flag)
 
     @torch.no_grad()

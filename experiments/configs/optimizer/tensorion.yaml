@@ -2,6 +2,10 @@ _target_: tensorion.Tensorion
 _convert_: all
 
 params: ???
+# Layers whose weight gets the Tensorion update, by module class. Every other parameter
+# uses the fallback. The experiments of the paper use every convolution kernel, including
+# 1x1 convolutions, and no linear layer. Remove this key to route by `min_order` instead.
+tensorion_modules: [Conv1d, Conv2d, Conv3d]
 lr: 1e-4
 weight_decay: 1e-4
 momentum: 0.95
@@ -19,7 +23,6 @@ orthogonalizer: newton_schulz
 ns_steps: null  # method default
 adjust_lr_fn: match_rms_adamw
 nuclear: false
-min_ndim: 3
 fallback: adamw
 adamw_betas: [0.9, 0.95]
 adamw_eps: 1e-8

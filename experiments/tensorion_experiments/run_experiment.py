@@ -61,6 +61,40 @@ def save_config_snapshot(cfg: DictConfig) -> str:
     return config_path
 
 
+def build_optimizer(optimizer_cfg: DictConfig, model: nn.Module) -> Optimizer:
+    """Instantiate the optimizer on the named parameters of ``model``.
+
+    If the config has ``tensorion_modules`` (a list of module class names, e.g.
+    ``[Conv2d]``), the weights of those modules get the Tensorion update and every
+    other parameter the fallback. This states the routing explicitly instead of
+    leaving it to the shapes of the parameters.
+    """
+    module_names = optimizer_cfg.get("tensorion_modules")
+    optimizer_cfg = OmegaConf.masked_copy(optimizer_cfg, [k for k in optimizer_cfg if k != "tensorion_modules"])
+    factory = instantiate(optimizer_cfg, _partial_=True)
+    named = list(model.named_parameters())
+    if module_names is None:
+        return factory(params=named)
+
+    known = {type(m).__name__ for m in model.modules()}
+    missing = [name for name in module_names if name not in known]
+    if len(missing) == len(module_names):
+        raise ValueError(f"tensorion_modules {list(module_names)} match no module of the model (it has {sorted(known)}).")
+    chosen = {
+        id(m.weight)
+        for m in model.modules()
+        if type(m).__name__ in module_names
+        and getattr(m, "weight", None) is not None
+        # A weight with fewer than two axes larger than 1 is a vector and has no unfolding.
+        and sum(n > 1 for n in m.weight.shape) >= 2
+    }
+    groups = [
+        {"params": [(n, p) for n, p in named if id(p) in chosen], "use_muon": True},
+        {"params": [(n, p) for n, p in named if id(p) not in chosen], "use_muon": False},
+    ]
+    return factory(params=[g for g in groups if g["params"]])
+
+
 def run(cfg: DictConfig):
     device = torch.device("cuda") if torch.cuda.is_available() else torch.device("cpu")
     print(f"{device=}")
@@ -68,7 +102,7 @@ def run(cfg: DictConfig):
 
     model = instantiate(cfg.model).to(device)
     train_ds, test_ds, train_loader, test_loader = data_preparation.load_from_config(cfg)
-    optimizer = instantiate(cfg.optimizer, params=model.named_parameters())
+    optimizer = build_optimizer(cfg.optimizer, model)
 
     scheduler_kwargs = {"optimizer": optimizer}
     if "steps_per_epoch" in cfg.scheduler.scheduler_kwargs.keys():

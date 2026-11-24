@@ -55,6 +55,15 @@ def synthetic() -> dict[str, torch.Tensor]:
     return tensors
 
 
+def conv_routing(model: torch.nn.Module) -> list[dict]:
+    """Convolution kernels on Tensorion, everything else on the fallback, as in the experiments."""
+    conv = {id(m.weight) for m in model.modules() if isinstance(m, torch.nn.Conv2d)}
+    return [
+        {"params": [p for p in model.parameters() if id(p) in conv], "use_muon": True},
+        {"params": [p for p in model.parameters() if id(p) not in conv], "use_muon": False},
+    ]
+
+
 def timed(fn, *args, repeat: int = 3):
     best = float("inf")
     for _ in range(repeat):
@@ -113,14 +122,14 @@ def step_times(steps: int = 20) -> None:
     ]:
         torch.manual_seed(0)
         model = ResNet18(num_classes=10)
-        optimizer = Tensorion(model.parameters(), min_ndim=3, **kwargs)
+        optimizer = Tensorion(conv_routing(model), **kwargs)
         x, y = torch.randn(32, 3, 32, 32), torch.randint(0, 10, (32,))
         elapsed = 0.0
         for step in range(-1, steps):  # step -1 is a warm-up and is not timed
             optimizer.zero_grad()
             torch.nn.functional.cross_entropy(model(x), y).backward()
             if step < 0:
-                Tensorion(model.parameters(), min_ndim=3, lr=0.0, weight_decay=0.0).step()
+                Tensorion(conv_routing(model), lr=0.0, weight_decay=0.0).step()
                 continue
             start = time.perf_counter()
             optimizer.step()
@@ -134,7 +143,7 @@ def stale_choice(every: int = 10, steps: int = 21) -> None:
     """Nuclear norm lost by reusing the online choice, against exact selection at every step."""
     torch.manual_seed(0)
     model = ResNet18(num_classes=10)
-    optimizer = Tensorion(model.parameters(), min_ndim=3, unfolding="online", online_every=every)
+    optimizer = Tensorion(conv_routing(model), unfolding="online", online_every=every)
     convs = [p for p in model.parameters() if p.ndim == 4]
     losses = []
     for _ in range(steps):

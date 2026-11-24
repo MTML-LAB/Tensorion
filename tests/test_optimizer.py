@@ -73,7 +73,7 @@ def test_matrix_update_is_muon():
 
 def test_parameter_routing():
     model = _net()
-    opt = Tensorion(model.parameters(), min_ndim=3)
+    opt = Tensorion(model.parameters(), min_order=3)
     _train(model, opt, steps=1)
     for p in model.parameters():
         if p.ndim >= 3:
@@ -306,7 +306,30 @@ def test_parameters_that_are_vectors_up_to_singleton_axes_use_the_fallback():
     uses_tensorion = {name: "momentum_buffer" in opt.state[p] for name, p in params.items()}
     assert uses_tensorion == {"depthwise": True, "conv1x1": True, "pos_embed": True, "cls": False, "scale": False}
 
+    # min_order counts axes larger than 1: a 1x1 convolution and (1, n, d) embeddings are matrices.
+    params = {name: nn.Parameter(torch.randn(shape)) for name, shape in shapes.items()}
+    opt = Tensorion(list(params.items()), min_order=3)
+    for p in params.values():
+        p.grad = torch.randn_like(p)
+    opt.step()
+    uses_tensorion = {name: "momentum_buffer" in opt.state[p] for name, p in params.items()}
+    assert uses_tensorion == {"depthwise": True, "conv1x1": False, "pos_embed": False, "cls": False, "scale": False}
+
     with pytest.raises(ValueError, match="cannot get the Tensorion update"):
         Tensorion([dict(params=[nn.Parameter(torch.zeros(1, 1, 16))], use_muon=True)])
     with pytest.raises(ValueError, match="match no parameter"):
         Tensorion([("cls", nn.Parameter(torch.zeros(1, 1, 16)))], unfolding={"cls": 2})
+
+
+def test_same_weights_stored_as_conv1x1_or_linear_get_the_same_update():
+    """The optimizer must not depend on axes of size 1."""
+    w = torch.randn(16, 8)
+    g = torch.randn(16, 8)
+    results = []
+    for shape in [(16, 8), (16, 8, 1, 1), (1, 16, 8)]:
+        p = nn.Parameter(w.reshape(shape).clone())
+        p.grad = g.reshape(shape).clone()
+        Tensorion([p]).step()
+        results.append(p.detach().reshape(16, 8))
+    torch.testing.assert_close(results[0], results[1])
+    torch.testing.assert_close(results[0], results[2])
