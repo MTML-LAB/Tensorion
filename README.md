@@ -65,15 +65,15 @@ optimizer = Tensorion(
 
 The `orthogonalizer` argument computes the polar factor `U Vᵀ` of the unfolded matrix `U S Vᵀ`.
 
-| `orthogonalizer=` | Method | Accuracy |
-|---|---|---|
-| `"svd"` (default) | exact SVD | exact |
-| `"newton_schulz"` | quintic Newton–Schulz iteration from Muon | singular values roughly in [0.7, 1.2] by design |
-| `"polar_express"` | [Polar Express](https://arxiv.org/abs/2505.16932) | exact to 2 decimals from 8 steps |
-| `"cans"` | [CANS](https://github.com/GrishKate/accelerating_orthogonalization), Chebyshev-accelerated Newton–Schulz | exact to 2 decimals from 10 steps |
-| a function `f(matrix, steps) -> matrix` | your own | |
+| `orthogonalizer=` | Method | Matmuls per step | Converged after |
+|---|---|---|---|
+| `"svd"` (default) | exact SVD | | exact |
+| `"newton_schulz"` | quintic Newton–Schulz iteration from Muon | 3 | never: singular values stay in about [0.7, 1.2] by design |
+| `"polar_express"` | [Polar Express](https://arxiv.org/abs/2505.16932) | 3 | 8 steps (24 matmuls) |
+| `"cans"` | [CANS](https://github.com/GrishKate/accelerating_orthogonalization), Chebyshev-accelerated Newton–Schulz with degree-3 polynomials | 2 | 10 steps (20 matmuls) |
+| a function `f(matrix, steps) -> matrix` | your own | | |
 
-The iterative methods use only matrix products, which run well on GPUs. Their iteration count is set by `ns_steps` (default 5). The accuracy column was measured on matrices with condition number up to 10³ (see `tests/test_orthogonalize.py`).
+The iterative methods use only matrix products, which run well on GPUs. Their iteration count is set by `ns_steps` (default 5). Compare them by matmuls, not steps: for the same number of matmuls, CANS is the most accurate. The "converged" column is for matrices with condition number up to 10³ (see `tests/test_orthogonalize.py`). CANS assumes normalized singular values of at least `1e-3`. For better-conditioned gradients, `functools.partial(tensorion.orthogonalize.cans, lower=...)` with a larger `lower` converges in fewer steps.
 
 ## All arguments
 
