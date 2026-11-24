@@ -56,8 +56,9 @@ class Tensorion(torch.optim.Optimizer):
             ``"online"`` estimates the nuclear norms without an SVD, ``"online_exact"``
             uses SVDs. See :mod:`tensorion.unfolding`.
         online_every: with an online unfolding, choose the split again only every this
-            many steps and reuse it in between. The momentum changes slowly, so a larger
-            value costs little and divides the overhead of the selection.
+            many steps and reuse it in between. The momentum changes slowly, so this
+            costs little and divides the overhead of the selection. ``1`` selects at
+            every step, as in the paper.
         orthogonalizer: ``"newton_schulz"``, ``"polar_express"``, ``"cans"``, ``"svd"``
             (exact) or a callable ``f(matrix, steps) -> matrix``.
             See :mod:`tensorion.orthogonalize`.
@@ -93,7 +94,7 @@ class Tensorion(torch.optim.Optimizer):
         momentum: float = 0.95,
         nesterov: bool = False,
         unfolding: UnfoldingSpec = "offline",
-        online_every: int = 1,
+        online_every: int = 10,
         orthogonalizer: OrthogonalizerSpec = "newton_schulz",
         ns_steps: Optional[int] = None,
         adjust_lr_fn: Optional[str] = "match_rms_adamw",

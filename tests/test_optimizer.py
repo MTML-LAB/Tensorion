@@ -267,12 +267,27 @@ def test_online_every_reuses_the_split_between_selections(monkeypatch):
         torch.testing.assert_close(p, q)
 
 
-def test_online_every_one_selects_every_step_and_matches_default():
+def test_online_every_defaults_to_ten():
     a, b = _net(), _net()
-    _train(a, Tensorion(a.parameters(), unfolding="online"), steps=3)
-    _train(b, Tensorion(b.parameters(), unfolding="online", online_every=1), steps=3)
+    opt = Tensorion(a.parameters(), unfolding="online")
+    assert opt.defaults["online_every"] == 10
+    _train(a, opt, steps=12)
+    _train(b, Tensorion(b.parameters(), unfolding="online", online_every=10), steps=12)
     for p, q in zip(a.parameters(), b.parameters()):
         assert torch.equal(p, q)
+
+
+def test_online_every_one_selects_at_every_step(monkeypatch):
+    from tensorion import unfolding
+
+    calls = []
+    original = unfolding.STRATEGIES["online"]
+    monkeypatch.setitem(unfolding.STRATEGIES, "online", lambda x: (calls.append(1), original(x))[1])
+    model = _net()
+    opt = Tensorion(model.parameters(), unfolding="online", online_every=1)
+    _train(model, opt, steps=4)
+    assert len(calls) == 3 * 4
+    assert "row_modes" not in opt.state[model[0].weight]
 
 
 @pytest.mark.parametrize("value", [0, -1, 2.5])

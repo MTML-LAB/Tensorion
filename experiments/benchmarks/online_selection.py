@@ -97,6 +97,7 @@ def main() -> None:
     print(f"\nbest split found for {same}/{len(tensors)} tensors, largest loss in nuclear norm {worst:.2%}")
     print(f"total time: SVD of every split {total_naive:.2f}s, online_exact {total_exact:.2f}s, online {total_online:.2f}s")
     step_times()
+    stale_choice()
 
 
 def step_times(steps: int = 20) -> None:
@@ -105,25 +106,56 @@ def step_times(steps: int = 20) -> None:
     baseline = None
     for label, kwargs in [
         ("offline", dict(unfolding="offline")),
-        ("online_exact", dict(unfolding="online_exact")),
-        ("online", dict(unfolding="online")),
-        ("online, online_every=10", dict(unfolding="online", online_every=10)),
-        ("online, online_every=100", dict(unfolding="online", online_every=100)),
+        ("online_exact, every step", dict(unfolding="online_exact", online_every=1)),
+        ("online, every step", dict(unfolding="online", online_every=1)),
+        ("online, every 10 steps", dict(unfolding="online", online_every=10)),
+        ("online, every 20 steps", dict(unfolding="online", online_every=20)),
     ]:
         torch.manual_seed(0)
         model = ResNet18(num_classes=10)
         optimizer = Tensorion(model.parameters(), min_ndim=3, **kwargs)
         x, y = torch.randn(32, 3, 32, 32), torch.randint(0, 10, (32,))
         elapsed = 0.0
-        for _ in range(steps):
+        for step in range(-1, steps):  # step -1 is a warm-up and is not timed
             optimizer.zero_grad()
             torch.nn.functional.cross_entropy(model(x), y).backward()
+            if step < 0:
+                Tensorion(model.parameters(), min_ndim=3, lr=0.0, weight_decay=0.0).step()
+                continue
             start = time.perf_counter()
             optimizer.step()
             elapsed += time.perf_counter() - start
         mean = elapsed / steps
         baseline = baseline or mean
         print(f"  {label:26s} {1e3 * mean:7.1f} ms   {mean / baseline - 1:+7.0%} over offline")
+
+
+def stale_choice(every: int = 10, steps: int = 21) -> None:
+    """Nuclear norm lost by reusing the online choice, against exact selection at every step."""
+    torch.manual_seed(0)
+    model = ResNet18(num_classes=10)
+    optimizer = Tensorion(model.parameters(), min_ndim=3, unfolding="online", online_every=every)
+    convs = [p for p in model.parameters() if p.ndim == 4]
+    losses = []
+    for _ in range(steps):
+        optimizer.zero_grad()
+        x, y = torch.randn(64, 3, 32, 32), torch.randint(0, 10, (64,))
+        torch.nn.functional.cross_entropy(model(x), y).backward()
+        optimizer.step()
+        for p in convs:
+            state = optimizer.state[p]
+            momentum, used = state["momentum_buffer"], state["row_modes"]
+            best = STRATEGIES["online_exact"](momentum)
+            if used == best:
+                losses.append(0.0)
+            else:
+                value = nuclear_norm_exact(matricize(momentum, used))
+                losses.append(max(0.0, 1 - value / nuclear_norm_exact(matricize(momentum, best))))
+    losses = torch.tensor(losses)
+    print(
+        f"\nonline with online_every={every}, {steps} training steps: nuclear norm lost against exact "
+        f"selection at every step: mean {losses.mean():.3%}, max {losses.max():.2%}"
+    )
 
 
 if __name__ == "__main__":

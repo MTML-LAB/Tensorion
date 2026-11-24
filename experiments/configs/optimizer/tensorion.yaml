@@ -12,8 +12,8 @@ nesterov: false
 #     conv1.weight: [0, 1]
 #     layer4.*.weight: online
 unfolding: offline
-# with an online unfolding: choose the split every this many steps
-online_every: 1
+# with an online unfolding: choose the split every this many steps (1: every step, as in the paper)
+online_every: 10
 # newton_schulz | polar_express | cans | svd
 orthogonalizer: newton_schulz
 ns_steps: null  # method default
