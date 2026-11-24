@@ -67,12 +67,13 @@ def _brute_force(x):
 
 @pytest.mark.parametrize("strategy", ["online", "online_exact"])
 def test_online_picks_largest_nuclear_norm(strategy):
-    # x[i, j, k] = A[i, k] * b[j]: the mode-1 unfolding has rank one, the others do not.
+    # x[i, j, k] = A[i, k] * b[j]: the mode-1 unfolding has rank one. The other two
+    # have the same nuclear norm, so either of them is a correct answer.
     A, b = torch.randn(6, 4), torch.randn(5)
     x = torch.einsum("ik,j->ijk", A, b)
-    best, _ = _brute_force(x)
+    best, nuclear = _brute_force(x)
     choice = resolve(strategy, x.ndim)(x)
-    assert choice == best
+    assert nuclear[choice] == pytest.approx(nuclear[best], rel=1e-4)
     assert choice != (1,)
 
 
@@ -170,3 +171,27 @@ def test_select():
     assert select(spec, "head.bias") == ("offline", None)  # unmatched: the default
     assert select("online", "anything") == ("online", None)
     assert sorted(STRATEGIES) == ["offline", "online", "online_exact"]
+
+
+@pytest.mark.parametrize(
+    "shape, squeezed",
+    [((64, 1, 3, 3), (64, 3, 3)), ((1, 197, 768), (197, 768)), ((8, 1, 4, 1, 3), (8, 4, 3)), ((128, 64, 1, 1), (128, 64))],
+)
+def test_axes_of_size_one_are_ignored(shape, squeezed):
+    """A tensor has the same unfoldings as the tensor without its axes of size 1."""
+
+    def matrix_shapes(s):
+        out = []
+        for rows, _ in _candidates(s):
+            r = 1
+            for m in rows:
+                r *= s[m]
+            numel = 1
+            for n in s:
+                numel *= n
+            out.append((r, numel // r))
+        return out
+
+    assert matrix_shapes(shape) == matrix_shapes(squeezed)
+    x = torch.randn(shape)
+    assert matricize(x, resolve("offline", x.ndim)(x)).shape == matricize(x.squeeze(), resolve("offline", len(squeezed))(x.squeeze())).shape

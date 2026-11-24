@@ -47,6 +47,8 @@ The `unfolding` argument decides which axes of a tensor become rows. The remaini
 
 `"offline"` is the paper's main strategy. `"online"` picks the unfolding that is optimal for the paper's tensor norm.
 
+Axes of size 1 are ignored: a depthwise kernel `(64, 1, 3, 3)` has the unfoldings of a `(64, 3, 3)` tensor, and a 1×1 convolution is a matrix. A parameter with fewer than two axes larger than 1, such as a class token `(1, 1, 768)`, is a vector and goes to the fallback optimizer.
+
 ### How the online choice stays cheap
 
 Taking an SVD of every unfolding at every step is expensive. `"online"` avoids all of them:

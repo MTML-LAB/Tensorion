@@ -71,7 +71,7 @@ def main() -> None:
     for x in tensors.values():
         for rows, _ in _candidates(tuple(x.shape)):
             M = matricize(x, rows)
-            if min(M.shape) >= 128:  # smaller matrices are handled exactly
+            if min(M.shape) >= 128:  # smaller matrices use their Gram matrix
                 errors.append(abs(nuclear_norm(M) / nuclear_norm_exact(M) - 1))
     errors = torch.tensor(errors)
     print(f"estimate vs SVD on {len(errors)} matrices: mean error {errors.mean():.2%}, max {errors.max():.2%}\n")

@@ -35,6 +35,10 @@ class Tensorion(torch.optim.Optimizer):
     All other parameters (biases, norms, and anything you route there) are
     updated by a fallback optimizer, AdamW by default.
 
+    Axes of size 1 are ignored when a tensor is unfolded. A parameter with fewer
+    than two axes larger than 1, such as a class token of shape ``(1, 1, d)``,
+    is a vector and always goes to the fallback optimizer.
+
     Args:
         params: parameters or parameter groups, as for any ``torch.optim`` optimizer.
             Pass ``model.named_parameters()`` to set the unfolding per layer by name.
@@ -150,10 +154,10 @@ class Tensorion(torch.optim.Optimizer):
             raise ValueError(f"fallback must be one of {_FALLBACKS}, got {group['fallback']!r}")
         if group["use_tensorion"]:
             for p in group["params"]:
-                if p.ndim < 2:
+                if not self._is_unfoldable(p):
                     raise ValueError(
                         f"A parameter of shape {tuple(p.shape)} cannot get the Tensorion update. "
-                        "Only parameters with 2 or more dimensions can."
+                        "Only parameters with 2 or more axes larger than 1 can."
                     )
         self._resolve_unfoldings(group)
 
@@ -201,9 +205,16 @@ class Tensorion(torch.optim.Optimizer):
             self._resolve_unfoldings(group)
 
     @staticmethod
-    def _uses_tensorion(p: Tensor, group: dict[str, Any]) -> bool:
+    def _is_unfoldable(p: Tensor) -> bool:
+        """Axes of size 1 do not count: without two larger axes the parameter is a vector."""
+        return sum(n > 1 for n in p.shape) >= 2
+
+    @classmethod
+    def _uses_tensorion(cls, p: Tensor, group: dict[str, Any]) -> bool:
         flag = group["use_tensorion"]
-        return p.ndim >= group["min_ndim"] if flag is None else bool(flag)
+        if flag is None:
+            return p.ndim >= group["min_ndim"] and cls._is_unfoldable(p)
+        return bool(flag)
 
     @torch.no_grad()
     def step(self, closure: Optional[Callable[[], float]] = None):

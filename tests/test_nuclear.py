@@ -43,11 +43,27 @@ def test_bounds_are_ordered_and_bracket_loosely(name):
     assert lower <= 1.1 * exact and upper >= 0.9 * exact
 
 
-def test_small_matrices_are_exact():
+def test_small_side_uses_the_gram_matrix():
     M = torch.randn(64, 4096)
     lower, upper = nuclear_norm_bounds(M)
-    assert lower == upper == pytest.approx(nuclear_norm_exact(M))
-    assert nuclear_norm_bounds(M.T) == (lower, upper)
+    assert lower == upper == pytest.approx(nuclear_norm_exact(M), rel=1e-5)
+    assert nuclear_norm_bounds(M.T) == pytest.approx((lower, upper), rel=1e-6)
+
+
+def test_very_wide_matrix_is_cheap():
+    """A 3 x N unfolding needs a 3 x 3 eigenvalue problem, not an SVD."""
+    M = torch.randn(3, 2_000_000)
+    assert nuclear_norm(M) == pytest.approx(nuclear_norm_exact(M), rel=1e-4)
+
+
+@pytest.mark.parametrize(
+    "singular_values",
+    [torch.cat([torch.ones(1), torch.zeros(99)]), torch.logspace(0, -6, 100), torch.ones(100)],
+    ids=["rank 1", "geometric decay", "flat"],
+)
+def test_gram_matrix_is_accurate_enough_for_small_singular_values(singular_values):
+    M = _with_spectrum(100, 5000, singular_values)
+    assert nuclear_norm(M) == pytest.approx(singular_values.sum().item(), rel=0.02)
 
 
 def test_zero_matrix():

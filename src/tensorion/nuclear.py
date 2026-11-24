@@ -36,13 +36,26 @@ Tensor = torch.Tensor
 
 __all__ = ["nuclear_norm", "nuclear_norm_bounds", "nuclear_norm_exact"]
 
-# Below this size of the smaller side an exact SVD is cheaper than the estimate.
-_EXACT_BELOW = 128
+# Below this size of the smaller side the Gram matrix is cheaper than the estimate.
+_GRAM_BELOW = 128
 
 
 def nuclear_norm_exact(M: Tensor) -> float:
     """Nuclear norm by a full SVD."""
     return torch.linalg.svdvals(M.float()).sum().item()
+
+
+def _nuclear_norm_gram(M: Tensor) -> float:
+    """Nuclear norm of a wide matrix from its small Gram matrix ``M M^T``.
+
+    The singular values of ``M`` are the square roots of the eigenvalues of
+    ``M M^T``, which is only ``rows x rows``. For a ``3 x N`` unfolding this is
+    one matrix product and a ``3 x 3`` eigenvalue problem. Forming the Gram
+    matrix in float32 costs accuracy for singular values far below the largest
+    one, at most about 1% of the nuclear norm for the sizes used here.
+    """
+    gram = (M @ M.mT).cpu().double()
+    return torch.linalg.eigvalsh(gram).clamp_min(0).sqrt().sum().item()
 
 
 @lru_cache(maxsize=128)
@@ -103,8 +116,9 @@ def _two_sided_quadrature(alpha: Tensor, beta: Tensor) -> tuple[Tensor, Tensor]:
 def nuclear_norm_bounds(M: Tensor, probes: int = 16, sketch: int = 16, steps: int = 8) -> tuple[float, float]:
     """Estimated lower and upper values of the nuclear norm of ``M``.
 
-    They are bounds up to the noise of the random probes. Matrices whose
-    smaller side is below 128 are handled exactly, and both values coincide.
+    They are bounds up to the noise of the random probes. For matrices whose
+    smaller side is below 128 the value is computed from the small Gram matrix
+    instead, and both values coincide.
 
     Args:
         M: a matrix.
@@ -116,9 +130,9 @@ def nuclear_norm_bounds(M: Tensor, probes: int = 16, sketch: int = 16, steps: in
     if M.shape[0] > M.shape[1]:
         M = M.mT
     rows = M.shape[0]
-    if rows < max(_EXACT_BELOW, 2 * steps, sketch + 1):
-        exact = nuclear_norm_exact(M)
-        return exact, exact
+    if rows < max(_GRAM_BELOW, 2 * steps, sketch + 1):
+        value = _nuclear_norm_gram(M)
+        return value, value
     scale = torch.linalg.matrix_norm(M).item()
     if not scale > 0:
         return 0.0, 0.0
