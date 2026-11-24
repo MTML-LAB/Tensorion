@@ -11,7 +11,11 @@ The unfolding of a layer is one of
   has the largest possible rank, i.e. maximizes ``min(rows, cols)``. It depends
   only on the shape, so it is fixed per layer. This is the default.
 * ``"online"``  -- the split whose matricization has the largest nuclear norm
-  for the current update. It is recomputed every step and costs one SVD per split.
+  for the current update, recomputed every step. The nuclear norms are
+  estimated without an SVD (see :mod:`tensorion.nuclear`), and most splits are
+  ruled out by a bound before anything is computed (see :func:`select_online`).
+* ``"online_exact"`` -- the same choice with exact nuclear norms from SVDs,
+  as in the ablation of the paper. Slower.
 * an ``int`` -- the mode-``k`` unfolding of that layer (negative indices allowed).
 * a tuple / list of ints -- the row modes of that layer.
 
@@ -31,6 +35,8 @@ from typing import Callable, Mapping, Sequence, Union
 
 import torch
 
+from .nuclear import nuclear_norm_bounds, nuclear_norm_exact
+
 Tensor = torch.Tensor
 RowModes = tuple[int, ...]
 LayerUnfolding = Union[str, int, Sequence[int]]
@@ -42,6 +48,7 @@ __all__ = [
     "unmatricize",
     "two_way_splits",
     "STRATEGIES",
+    "select_online",
     "check_unfolding",
     "select",
     "resolve",
@@ -85,30 +92,71 @@ def two_way_splits(ndim: int) -> list[RowModes]:
 
 
 @lru_cache(maxsize=None)
-def _offline_for_shape(shape: tuple[int, ...]) -> RowModes:
+def _candidates(shape: tuple[int, ...]) -> tuple[tuple[RowModes, int], ...]:
+    """The distinct two-way splits of ``shape`` with their rank bounds, largest rank first.
+
+    Splits that differ only in axes of size 1 give the same matrix, so only the
+    first of them is kept. A split with a single row or column has the smallest
+    possible nuclear norm, so it is dropped when there is another one. A 1x1
+    convolution is left with a single unfolding.
+    """
     numel = math.prod(shape)
-
-    def rank_bound(rows: RowModes) -> int:
+    real = frozenset(m for m, n in enumerate(shape) if n > 1)
+    seen = set()
+    candidates = []
+    for rows in two_way_splits(len(shape)):
+        part = frozenset(rows) & real
+        key = frozenset((part, real - part))
+        if key in seen:
+            continue
+        seen.add(key)
         r = math.prod(shape[m] for m in rows)
-        return min(r, numel // r)
-
-    return max(two_way_splits(len(shape)), key=rank_bound)
+        candidates.append((rows, min(r, numel // r)))
+    candidates.sort(key=lambda c: -c[1])
+    return tuple(c for i, c in enumerate(candidates) if i == 0 or c[1] > 1)
 
 
 def _offline(x: Tensor) -> RowModes:
-    return _offline_for_shape(tuple(x.shape))
+    return _candidates(tuple(x.shape))[0][0]
 
 
-def _online(x: Tensor) -> RowModes:
-    def nuclear_norm(rows: RowModes) -> float:
-        return torch.linalg.svdvals(matricize(x, rows).float()).sum().item()
+def select_online(x: Tensor, bounds: Callable[[Tensor], tuple[float, float]] = nuclear_norm_bounds) -> RowModes:
+    """The split of ``x`` with the largest nuclear norm.
 
-    return max(two_way_splits(x.ndim), key=nuclear_norm)
+    ``bounds(matrix)`` returns a lower and an upper value of the nuclear norm
+    of a matricization, and their mean ranks the splits.
+
+    The Frobenius norm is the same for every matricization and
+    ``|M|_* <= sqrt(rank) |M|_F``. Splits are therefore visited from the largest
+    rank bound down (the offline choice first), and the search stops as soon as
+    this bound of the next split is below the lower value of the best one so
+    far. The remaining splits are never formed.
+    """
+    candidates = _candidates(tuple(x.shape))
+    best = candidates[0][0]
+    if len(candidates) == 1:
+        return best
+    frobenius = torch.linalg.vector_norm(x.float()).item()
+    best_value = best_lower = -1.0
+    for rows, rank in candidates:
+        if math.sqrt(rank) * frobenius <= best_lower:
+            break
+        lower, upper = bounds(matricize(x, rows))
+        value = (lower + upper) / 2
+        if value > best_value:
+            best, best_value, best_lower = rows, value, lower
+    return best
+
+
+def _exact_bounds(M: Tensor) -> tuple[float, float]:
+    value = nuclear_norm_exact(M)
+    return value, value
 
 
 STRATEGIES: dict[str, Callable[[Tensor], RowModes]] = {
     "offline": _offline,
-    "online": _online,
+    "online": select_online,
+    "online_exact": partial(select_online, bounds=_exact_bounds),
 }
 
 

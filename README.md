@@ -42,9 +42,27 @@ The `unfolding` argument decides which axes of a tensor become rows. The remaini
 | `unfolding=` | Rows of the matrix | Example for a conv kernel `(64, 32, 3, 3)` |
 |---|---|---|
 | `"offline"` (default) | the split of axes that allows the largest rank, fixed by the shape | `192 × 96` (axes 0 and 2) |
-| `"online"` | the split with the largest nuclear norm of the current update, chosen every step | depends on the update |
+| `"online"` | the split with the largest nuclear norm of the current update, chosen again during training | depends on the update |
+| `"online_exact"` | the same choice, with nuclear norms from exact SVDs | depends on the update |
 
-`"offline"` is the paper's main strategy. `"online"` picks the unfolding that is optimal for the paper's tensor norm, but it costs one SVD per candidate split at every step, so it is the slowest option.
+`"offline"` is the paper's main strategy. `"online"` picks the unfolding that is optimal for the paper's tensor norm.
+
+### How the online choice stays cheap
+
+Taking an SVD of every unfolding at every step is expensive. `"online"` avoids all of them:
+
+- **Most splits are never formed.** All unfoldings of a tensor have the same Frobenius norm, and the nuclear norm of a matrix is at most `√rank` times it. Splits are visited from the largest rank down, and the search stops once this bound falls below the best split so far. On a CIFAR ResNet-18, 2 of the 7 splits of a 3×3 kernel are looked at in most layers and 4 at most. A 1×1 convolution or a matrix has a single unfolding and costs nothing.
+- **Nuclear norms are estimated with matrix products only.** The estimate is `tr((MMᵀ)^½)` by stochastic Lanczos quadrature. It averages the Gauss and Gauss–Radau rules, which over- and under-estimate, and it uses [Hutch++](https://arxiv.org/abs/2010.09649) deflation to cut the probe noise for low-rank gradients. See [`tensorion/nuclear.py`](src/tensorion/nuclear.py).
+- **The choice can be reused.** `online_every=N` selects every `N` steps and keeps the split in between. The momentum changes slowly, so this costs little.
+
+Measured on momentum tensors of a CIFAR ResNet-18 and on synthetic tensors (CPU, `python benchmarks/online_selection.py` in `experiments/`):
+
+| | `"online_exact"` | `"online"` | `"online"`, `online_every=10` |
+|---|---|---|---|
+| Time of `optimizer.step()` over `"offline"` | +362% | +26% | within noise (±4%) |
+| Nuclear norm lost against the best split | 0 | 0.5% at most, 0.04% on average | not measured |
+
+The estimate of a single nuclear norm is off by 1% on average and 5% at most. When `"online"` picks a different split than `"online_exact"`, the two splits are near-ties, so the loss stays small. The probes are fixed, so the choice is deterministic and does not touch the global random state.
 
 ### Per-layer unfoldings
 
@@ -87,7 +105,8 @@ The CANS defaults are the Muon setting of the CANS paper (7 steps, lower singula
 | `weight_decay` | `0.1` | decoupled weight decay (coupled for the SGD fallback) |
 | `momentum` | `0.95` | momentum of the Tensorion update |
 | `nesterov` | `False` | Nesterov momentum |
-| `unfolding` | `"offline"` | `"offline"`, `"online"`, or a per-layer mapping, see [Choosing the unfolding](#choosing-the-unfolding) |
+| `unfolding` | `"offline"` | `"offline"`, `"online"`, `"online_exact"`, or a per-layer mapping, see [Choosing the unfolding](#choosing-the-unfolding) |
+| `online_every` | `1` | with an online unfolding, choose the split every this many steps and reuse it in between |
 | `orthogonalizer` | `"newton_schulz"` | see [Choosing the orthogonalizer](#choosing-the-orthogonalizer) |
 | `ns_steps` | `None` | iterations of iterative orthogonalizers. `None` uses each method's default. |
 | `adjust_lr_fn` | `"match_rms_adamw"` | learning rate scaling for an unfolded `rows × cols` update: `"match_rms_adamw"` multiplies by `0.2·√max(rows, cols)` so AdamW learning rates carry over, `"original"` by `√max(1, rows/cols)`, `None` applies no scaling |

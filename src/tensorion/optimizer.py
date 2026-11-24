@@ -53,7 +53,11 @@ class Tensorion(torch.optim.Optimizer):
             mapping from parameter names or ``fnmatch`` patterns to a strategy, an axis or
             a tuple of axes for that layer. Unmatched layers use ``"offline"``. Each layer's
             unfolding is checked against its shape when the optimizer is built.
-            See :mod:`tensorion.unfolding`.
+            ``"online"`` estimates the nuclear norms without an SVD, ``"online_exact"``
+            uses SVDs. See :mod:`tensorion.unfolding`.
+        online_every: with an online unfolding, choose the split again only every this
+            many steps and reuse it in between. The momentum changes slowly, so a larger
+            value costs little and divides the overhead of the selection.
         orthogonalizer: ``"newton_schulz"``, ``"polar_express"``, ``"cans"``, ``"svd"``
             (exact) or a callable ``f(matrix, steps) -> matrix``.
             See :mod:`tensorion.orthogonalize`.
@@ -89,6 +93,7 @@ class Tensorion(torch.optim.Optimizer):
         momentum: float = 0.95,
         nesterov: bool = False,
         unfolding: UnfoldingSpec = "offline",
+        online_every: int = 1,
         orthogonalizer: OrthogonalizerSpec = "newton_schulz",
         ns_steps: Optional[int] = None,
         adjust_lr_fn: Optional[str] = "match_rms_adamw",
@@ -107,6 +112,7 @@ class Tensorion(torch.optim.Optimizer):
             momentum=momentum,
             nesterov=nesterov,
             unfolding=unfolding,
+            online_every=online_every,
             orthogonalizer=orthogonalizer,
             ns_steps=ns_steps,
             adjust_lr_fn=adjust_lr_fn,
@@ -119,6 +125,7 @@ class Tensorion(torch.optim.Optimizer):
             use_tensorion=None,
         )
         self._unfoldings: dict[Tensor, Callable[[Tensor], tuple[int, ...]]] = {}
+        self._online: set[Tensor] = set()
         self._matched_keys: dict[int, set[str]] = {}
         super().__init__(params, defaults)
         self._check_all_keys_matched()
@@ -136,6 +143,8 @@ class Tensorion(torch.optim.Optimizer):
         resolve_orthogonalizer(group["orthogonalizer"])
         if group["adjust_lr_fn"] not in _ADJUST_LR_FNS:
             raise ValueError(f"adjust_lr_fn must be one of {list(_ADJUST_LR_FNS)}, got {group['adjust_lr_fn']!r}")
+        if not (isinstance(group["online_every"], int) and group["online_every"] >= 1):
+            raise ValueError(f"online_every must be a positive integer, got {group['online_every']!r}")
         if group["fallback"] not in _FALLBACKS:
             raise ValueError(f"fallback must be one of {_FALLBACKS}, got {group['fallback']!r}")
         if group["use_tensorion"]:
@@ -164,6 +173,8 @@ class Tensorion(torch.optim.Optimizer):
             layer_spec, key = _unfolding.select(spec, name)
             if key is not None:
                 matched.add(key)
+            if isinstance(layer_spec, str) and layer_spec.startswith("online"):
+                self._online.add(p)
             try:
                 self._unfoldings[p] = _unfolding.resolve(layer_spec, p.ndim)
             except ValueError as e:
@@ -183,6 +194,7 @@ class Tensorion(torch.optim.Optimizer):
     def load_state_dict(self, state_dict: dict[str, Any]) -> None:
         super().load_state_dict(state_dict)
         self._unfoldings.clear()
+        self._online.clear()
         self._matched_keys.clear()
         for group in self.param_groups:
             self._resolve_unfoldings(group)
@@ -227,7 +239,16 @@ class Tensorion(torch.optim.Optimizer):
         buf.mul_(group["momentum"]).add_(g)
         g = g.add(buf, alpha=group["momentum"]) if group["nesterov"] else buf
 
-        row_modes = unfold(g)
+        every = group["online_every"]
+        if every > 1 and p in self._online:
+            # Reuse the split chosen at the last selection step.
+            age = state.get("unfolding_age", 0)
+            if age % every == 0:
+                state["row_modes"] = unfold(g)
+            state["unfolding_age"] = age + 1
+            row_modes = state["row_modes"]
+        else:
+            row_modes = unfold(g)
         G = matricize(g, row_modes)
         steps = group["ns_steps"]
         U = orthogonalize(G) if steps is None else orthogonalize(G, steps)

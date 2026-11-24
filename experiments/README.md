@@ -17,6 +17,7 @@ cd experiments
 ```bash
 python run.py                                          # ResNet-18 on CIFAR-10 with Tensorion
 python run.py optimizer.unfolding=online               # another unfolding
+python run.py optimizer.unfolding=online optimizer.online_every=10
 python run.py 'optimizer.unfolding={conv1.weight:[0,1]}'  # a fixed unfolding for one layer
 python run.py optimizer.orthogonalizer=polar_express   # another orthogonalizer
 python run.py optimizer=adamw dataset=cifar100         # a baseline
@@ -42,5 +43,7 @@ To log to [Comet](https://www.comet.com/), `pip install comet_ml`, then pass `co
 pytest -m "not integration"   # fast unit tests
 TENSORION_TEST_DOWNLOAD=1 pytest -m integration   # one short CIFAR-10 epoch
 ```
+
+`benchmarks/online_selection.py` compares the SVD-free online unfolding selection with the exact one (accuracy and time).
 
 `notebooks/` holds exploratory notebooks from development. They import modules by their old paths and are kept for reference only.

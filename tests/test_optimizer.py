@@ -235,3 +235,47 @@ def test_per_layer_state_dict_roundtrip():
     _train(clone, clone_opt, steps=1)
     for p, q in zip(model.parameters(), clone.parameters()):
         torch.testing.assert_close(p, q)
+
+
+def test_online_every_reuses_the_split_between_selections(monkeypatch):
+    from tensorion import unfolding
+
+    calls = []
+    original = unfolding.STRATEGIES["online"]
+
+    def counting(x):
+        calls.append(tuple(x.shape))
+        return original(x)
+
+    monkeypatch.setitem(unfolding.STRATEGIES, "online", counting)
+    model = _net()
+    opt = Tensorion(model.named_parameters(), unfolding="online", online_every=3)
+    _train(model, opt, steps=7)
+    # 3 layers get the Tensorion update, selections happen at steps 0, 3 and 6.
+    assert len(calls) == 3 * 3
+    state = opt.state[model[0].weight]
+    assert state["unfolding_age"] == 7 and isinstance(state["row_modes"], tuple)
+
+    # The stored split survives a checkpoint.
+    clone = _net()
+    clone.load_state_dict(model.state_dict())
+    clone_opt = Tensorion(clone.named_parameters(), unfolding="online", online_every=3)
+    clone_opt.load_state_dict(copy.deepcopy(opt.state_dict()))
+    _train(model, opt, steps=2)
+    _train(clone, clone_opt, steps=2)
+    for p, q in zip(model.parameters(), clone.parameters()):
+        torch.testing.assert_close(p, q)
+
+
+def test_online_every_one_selects_every_step_and_matches_default():
+    a, b = _net(), _net()
+    _train(a, Tensorion(a.parameters(), unfolding="online"), steps=3)
+    _train(b, Tensorion(b.parameters(), unfolding="online", online_every=1), steps=3)
+    for p, q in zip(a.parameters(), b.parameters()):
+        assert torch.equal(p, q)
+
+
+@pytest.mark.parametrize("value", [0, -1, 2.5])
+def test_rejects_bad_online_every(value):
+    with pytest.raises(ValueError, match="online_every"):
+        Tensorion(_net().parameters(), online_every=value)

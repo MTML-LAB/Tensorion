@@ -6,12 +6,14 @@ lr: 1e-4
 weight_decay: 1e-4
 momentum: 0.95
 nesterov: false
-# offline | online, or per layer by parameter name / fnmatch pattern
+# offline | online | online_exact, or per layer by parameter name / fnmatch pattern
 # (unmatched layers use offline), for example:
 #   unfolding:
 #     conv1.weight: [0, 1]
 #     layer4.*.weight: online
 unfolding: offline
+# with an online unfolding: choose the split every this many steps
+online_every: 1
 # newton_schulz | polar_express | cans | svd
 orthogonalizer: newton_schulz
 ns_steps: null  # method default
