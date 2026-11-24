@@ -17,7 +17,7 @@ cd experiments
 ```bash
 python run.py                                          # ResNet-18 on CIFAR-10 with Tensorion
 python run.py optimizer.unfolding=online               # another unfolding
-python run.py 'optimizer.unfolding=[0,1]'              # a fixed unfolding
+python run.py 'optimizer.unfolding={conv1.weight:[0,1]}'  # a fixed unfolding for one layer
 python run.py optimizer.orthogonalizer=polar_express   # another orthogonalizer
 python run.py optimizer=adamw dataset=cifar100         # a baseline
 python run.py -m optimizer.lr=1e-4,3e-4,1e-3           # a sweep

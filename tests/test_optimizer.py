@@ -53,7 +53,7 @@ def test_fixed_mode_svd_update_matches_reference():
     w0 = w.detach().clone()
     w.grad = torch.randn_like(w)
     lr, wd = 0.01, 0.1
-    Tensorion([w], lr=lr, weight_decay=wd, unfolding=2, orthogonalizer="svd").step()
+    Tensorion([("w", w)], lr=lr, weight_decay=wd, unfolding={"w": 2}, orthogonalizer="svd").step()
 
     G = w.grad.permute(2, 0, 1, 3).reshape(3, -1)
     U, _, Vh = torch.linalg.svd(G, full_matrices=False)
@@ -105,25 +105,30 @@ def test_rejects_vectors_forced_onto_tensorion():
 
 @pytest.mark.parametrize(
     "kwargs",
-    [dict(unfolding="smallest"), dict(orthogonalizer="qr"), dict(adjust_lr_fn="spectral"), dict(fallback="adam")],
+    [
+        dict(unfolding="smallest"),
+        dict(orthogonalizer="qr"),
+        dict(adjust_lr_fn="spectral"),
+        dict(fallback="adam"),
+        dict(unfolding=0),
+        dict(unfolding={"0.weight": 0}),  # names needed, but plain parameters were passed
+    ],
 )
 def test_rejects_bad_options_early(kwargs):
-    with pytest.raises(ValueError):
+    with pytest.raises((TypeError, ValueError)):
         Tensorion(_net().parameters(), **kwargs)
 
 
-@pytest.mark.parametrize("unfolding", sorted(STRATEGIES) + [0, -1, (0, 2)])
+@pytest.mark.parametrize("unfolding", sorted(STRATEGIES) + [{"0.weight": (0, 2), "2.weight": -1, "4.weight": 0}])
 @pytest.mark.parametrize("orthogonalizer", sorted(ORTHOGONALIZERS))
 def test_all_options_train(unfolding, orthogonalizer):
     model = _net()
     opt = Tensorion(
-        model.parameters(),
+        model.named_parameters(),
         lr=1e-3,
         unfolding=unfolding,
         orthogonalizer=orthogonalizer,
         nesterov=True,
-        # Fixed 3-axis splits do not apply to the 2-D head, keep it on AdamW.
-        min_ndim=3 if isinstance(unfolding, tuple) else 2,
     )
     before = copy.deepcopy(model.state_dict())
     _train(model, opt)
@@ -145,8 +150,8 @@ def test_per_group_unfolding():
         dict(params=list(model[0].parameters()), unfolding="online"),
         dict(params=list(model[2].parameters()) + list(model[4].parameters())),
     ]
-    opt = Tensorion(groups, unfolding=0)
-    assert [g["unfolding"] for g in opt.param_groups] == ["online", 0]
+    opt = Tensorion(groups, unfolding="offline")
+    assert [g["unfolding"] for g in opt.param_groups] == ["online", "offline"]
     _train(model, opt, steps=1)
 
 
@@ -182,3 +187,51 @@ def test_closure_returns_loss():
         return loss
 
     assert torch.is_tensor(opt.step(closure))
+
+
+def test_per_layer_unfolding_by_name():
+    model = _net()  # weights: 0.weight (8, 3, 3, 3), 2.weight (4, 8, 3, 5), 4.weight (10, 144)
+    opt = Tensorion(model.named_parameters(), unfolding={"0.weight": (0, 1), "2.*": 2})
+    probe = torch.zeros(1)
+    assert opt._unfoldings[model[0].weight](probe) == (0, 1)
+    assert opt._unfoldings[model[2].weight](probe) == (2,)
+    # Unmatched layers use the offline strategy.
+    assert opt._unfoldings[model[4].weight](model[4].weight) == (0,)
+    _train(model, opt)
+
+
+def test_per_layer_axes_are_checked_against_each_shape():
+    with pytest.raises(ValueError, match="'4.weight' of shape \\(10, 144\\)"):
+        Tensorion(_net().named_parameters(), unfolding={"*.weight": (0, 1)})
+
+
+def test_unmatched_unfolding_keys_are_reported():
+    with pytest.raises(ValueError, match="conv9"):
+        Tensorion(_net().named_parameters(), unfolding={"conv9.weight": 0})
+
+
+def test_named_parameters_with_strategy():
+    model = _net()
+    _train(model, Tensorion(model.named_parameters(), unfolding="online"))
+
+
+def test_per_layer_state_dict_roundtrip():
+    spec = {"0.weight": (0, 1), "2.weight": 2}
+    model = _net()
+    opt = Tensorion(model.named_parameters(), unfolding=spec)
+    _train(model, opt, steps=2)
+
+    buffer = io.BytesIO()
+    torch.save({"model": model.state_dict(), "opt": opt.state_dict()}, buffer)
+    buffer.seek(0)
+    saved = torch.load(buffer)
+
+    clone = _net()
+    clone.load_state_dict(saved["model"])
+    clone_opt = Tensorion(clone.named_parameters(), unfolding=spec)
+    clone_opt.load_state_dict(saved["opt"])
+
+    _train(model, opt, steps=1)
+    _train(clone, clone_opt, steps=1)
+    for p, q in zip(model.parameters(), clone.parameters()):
+        torch.testing.assert_close(p, q)

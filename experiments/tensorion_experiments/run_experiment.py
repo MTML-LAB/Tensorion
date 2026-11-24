@@ -68,7 +68,7 @@ def run(cfg: DictConfig):
 
     model = instantiate(cfg.model).to(device)
     train_ds, test_ds, train_loader, test_loader = data_preparation.load_from_config(cfg)
-    optimizer = instantiate(cfg.optimizer, params=model.parameters())
+    optimizer = instantiate(cfg.optimizer, params=model.named_parameters())
 
     scheduler_kwargs = {"optimizer": optimizer}
     if "steps_per_epoch" in cfg.scheduler.scheduler_kwargs.keys():

@@ -3,12 +3,13 @@
 from __future__ import annotations
 
 import math
-from typing import Any, Callable, Iterable, Optional, Union
+from typing import Any, Callable, Iterable, Mapping, Optional, Union
 
 import torch
 
 from .orthogonalize import OrthogonalizerSpec, resolve_orthogonalizer
-from .unfolding import UnfoldingSpec, matricize, resolve_unfolding, unmatricize
+from . import unfolding as _unfolding
+from .unfolding import UnfoldingSpec, matricize, unmatricize
 
 Tensor = torch.Tensor
 
@@ -36,6 +37,7 @@ class Tensorion(torch.optim.Optimizer):
 
     Args:
         params: parameters or parameter groups, as for any ``torch.optim`` optimizer.
+            Pass ``model.named_parameters()`` to set the unfolding per layer by name.
             A group may set ``use_muon`` (or ``use_tensorion``) to ``True``/``False`` to
             force the update rule; otherwise it is chosen by ``p.ndim >= min_ndim``.
             Any other argument below can also be overridden per group. Groups written
@@ -45,10 +47,12 @@ class Tensorion(torch.optim.Optimizer):
             coupled (L2) for SGD parameters.
         momentum: momentum of the Tensorion update.
         nesterov: use Nesterov momentum for the Tensorion update.
-        unfolding: how a tensor is turned into a matrix: ``"offline"`` (the split of axes
-            with the largest rank, fixed by the shape), ``"online"`` (the split with the
-            largest nuclear norm, chosen every step), an axis index, a tuple of axes used
-            as rows, or a callable ``f(update) -> axis | axes``.
+        unfolding: how a tensor is turned into a matrix. Either a strategy for every layer,
+            ``"offline"`` (the split of axes with the largest rank, fixed by the shape) or
+            ``"online"`` (the split with the largest nuclear norm, chosen every step), or a
+            mapping from parameter names or ``fnmatch`` patterns to a strategy, an axis or
+            a tuple of axes for that layer. Unmatched layers use ``"offline"``. Each layer's
+            unfolding is checked against its shape when the optimizer is built.
             See :mod:`tensorion.unfolding`.
         orthogonalizer: ``"newton_schulz"``, ``"polar_express"``, ``"cans"``, ``"svd"``
             (exact) or a callable ``f(matrix, steps) -> matrix``.
@@ -69,6 +73,12 @@ class Tensorion(torch.optim.Optimizer):
     Example::
 
         optimizer = Tensorion(model.parameters(), lr=1e-3)
+
+        # A fixed unfolding for some layers, "online" for others, "offline" for the rest.
+        optimizer = Tensorion(
+            model.named_parameters(),
+            unfolding={"conv1.weight": (0, 1), "layer4.*.weight": "online"},
+        )
     """
 
     def __init__(
@@ -108,7 +118,10 @@ class Tensorion(torch.optim.Optimizer):
             sgd_momentum=sgd_momentum,
             use_tensorion=None,
         )
+        self._unfoldings: dict[Tensor, Callable[[Tensor], tuple[int, ...]]] = {}
+        self._matched_keys: dict[int, set[str]] = {}
         super().__init__(params, defaults)
+        self._check_all_keys_matched()
 
     def add_param_group(self, param_group: dict[str, Any]) -> None:
         # Accept the group keys of Muon's `MuonWithAuxAdam`.
@@ -119,7 +132,7 @@ class Tensorion(torch.optim.Optimizer):
         group = self.param_groups[-1]
 
         # Fail at construction time rather than at the first step.
-        resolve_unfolding(group["unfolding"])
+        _unfolding.check_unfolding(group["unfolding"])
         resolve_orthogonalizer(group["orthogonalizer"])
         if group["adjust_lr_fn"] not in _ADJUST_LR_FNS:
             raise ValueError(f"adjust_lr_fn must be one of {list(_ADJUST_LR_FNS)}, got {group['adjust_lr_fn']!r}")
@@ -132,6 +145,47 @@ class Tensorion(torch.optim.Optimizer):
                         f"A parameter of shape {tuple(p.shape)} cannot get the Tensorion update. "
                         "Only parameters with 2 or more dimensions can."
                     )
+        self._resolve_unfoldings(group)
+
+    def _resolve_unfoldings(self, group: dict[str, Any]) -> None:
+        """Fix the unfolding of every Tensorion parameter in ``group``, checked against its shape."""
+        spec = group["unfolding"]
+        names = group.get("param_names")
+        if isinstance(spec, Mapping) and names is None:
+            raise ValueError(
+                "unfolding is given per parameter name, so the optimizer needs the names: "
+                "pass model.named_parameters() (or named parameters in each group)."
+            )
+        matched = self._matched_keys.setdefault(id(spec), set())
+        for i, p in enumerate(group["params"]):
+            if not self._uses_tensorion(p, group):
+                continue
+            name = names[i] if names is not None else None
+            layer_spec, key = _unfolding.select(spec, name)
+            if key is not None:
+                matched.add(key)
+            try:
+                self._unfoldings[p] = _unfolding.resolve(layer_spec, p.ndim)
+            except ValueError as e:
+                raise ValueError(f"Parameter {name!r} of shape {tuple(p.shape)}: {e}") from None
+
+    def _check_all_keys_matched(self) -> None:
+        for group in self.param_groups:
+            spec = group["unfolding"]
+            if isinstance(spec, Mapping):
+                unmatched = [k for k in spec if k not in self._matched_keys.get(id(spec), set())]
+                if unmatched:
+                    raise ValueError(
+                        f"unfolding keys {unmatched} match no parameter that gets the Tensorion update "
+                        "(check the names in model.named_parameters() and min_ndim)."
+                    )
+
+    def load_state_dict(self, state_dict: dict[str, Any]) -> None:
+        super().load_state_dict(state_dict)
+        self._unfoldings.clear()
+        self._matched_keys.clear()
+        for group in self.param_groups:
+            self._resolve_unfoldings(group)
 
     @staticmethod
     def _uses_tensorion(p: Tensor, group: dict[str, Any]) -> bool:
@@ -151,13 +205,12 @@ class Tensorion(torch.optim.Optimizer):
                 loss = closure()
 
         for group in self.param_groups:
-            unfold = resolve_unfolding(group["unfolding"])
             orthogonalize = resolve_orthogonalizer(group["orthogonalizer"])
             for p in group["params"]:
                 if p.grad is None:
                     continue
                 if self._uses_tensorion(p, group):
-                    self._tensorion_step(p, group, unfold, orthogonalize)
+                    self._tensorion_step(p, group, self._unfoldings[p], orthogonalize)
                 elif group["fallback"] == "adamw":
                     self._adamw_step(p, group)
                 else:

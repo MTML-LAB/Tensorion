@@ -37,29 +37,31 @@ Tensorion(params, nesterov=True, adjust_lr_fn="original")
 
 ## Choosing the unfolding
 
-The `unfolding` argument decides which axes of a tensor become rows. The remaining axes become columns.
+The `unfolding` argument decides which axes of a tensor become rows. The remaining axes become columns. The paper's two strategies work for any shape:
 
 | `unfolding=` | Rows of the matrix | Example for a conv kernel `(64, 32, 3, 3)` |
 |---|---|---|
 | `"offline"` (default) | the split of axes that allows the largest rank, fixed by the shape | `192 × 96` (axes 0 and 2) |
 | `"online"` | the split with the largest nuclear norm of the current update, chosen every step | depends on the update |
-| `k` | axis `k` (negative indices work) | `unfolding=0` gives `64 × 288` |
-| `(i, j, ...)` | the given axes | `unfolding=(0, 1)` gives `2048 × 9` |
-| a function `f(update) -> axis or axes` | whatever you return | |
 
 `"offline"` is the paper's main strategy. `"online"` picks the unfolding that is optimal for the paper's tensor norm, but it costs one SVD per candidate split at every step, so it is the slowest option.
 
-Different layers can use different unfoldings through parameter groups:
+### Per-layer unfoldings
+
+A fixed unfolding only makes sense for a particular shape, so it is set per layer. Pass `model.named_parameters()` and map parameter names, or [`fnmatch`](https://docs.python.org/3/library/fnmatch.html) patterns, to a strategy, an axis, or a tuple of axes:
 
 ```python
 optimizer = Tensorion(
-    [
-        {"params": conv_params, "unfolding": "online"},
-        {"params": linear_params},  # uses the default below
-    ],
-    unfolding="offline",
+    model.named_parameters(),
+    unfolding={
+        "conv1.weight": (0, 1),           # rows: axes 0 and 1  ->  (64·3) × (7·7)
+        "layer*.0.conv1.weight": 0,       # rows: axis 0
+        "layer4.*.weight": "online",
+    },
 )
 ```
+
+An exact name wins over patterns, and patterns are tried in order. Layers that match nothing use `"offline"`. Every layer's unfolding is checked against its shape when the optimizer is built, so a wrong axis fails right away with the layer's name. A key that matches no layer is reported too.
 
 ## Choosing the orthogonalizer
 
@@ -85,7 +87,7 @@ The CANS defaults are the Muon setting of the CANS paper (7 steps, lower singula
 | `weight_decay` | `0.1` | decoupled weight decay (coupled for the SGD fallback) |
 | `momentum` | `0.95` | momentum of the Tensorion update |
 | `nesterov` | `False` | Nesterov momentum |
-| `unfolding` | `"offline"` | see [Choosing the unfolding](#choosing-the-unfolding) |
+| `unfolding` | `"offline"` | `"offline"`, `"online"`, or a per-layer mapping, see [Choosing the unfolding](#choosing-the-unfolding) |
 | `orthogonalizer` | `"newton_schulz"` | see [Choosing the orthogonalizer](#choosing-the-orthogonalizer) |
 | `ns_steps` | `None` | iterations of iterative orthogonalizers. `None` uses each method's default. |
 | `adjust_lr_fn` | `"match_rms_adamw"` | learning rate scaling for an unfolded `rows × cols` update: `"match_rms_adamw"` multiplies by `0.2·√max(rows, cols)` so AdamW learning rates carry over, `"original"` by `√max(1, rows/cols)`, `None` applies no scaling |
