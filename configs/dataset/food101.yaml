@@ -1,7 +1,0 @@
-defaults:
-  - transforms: food101
-
-_target_: tensorion.datasets.food101._load_food101
-num_classes: 101
-download: true
-data_path: null

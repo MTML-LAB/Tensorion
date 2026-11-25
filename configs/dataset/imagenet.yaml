@@ -1,8 +1,0 @@
-defaults:
-  - transforms: imagenet
-
-_target_: tensorion.datasets.hf_imagenet._load_imagenet
-num_classes: 1000
-download: false
-data_path: ???
-hf_name: imagenet-1k

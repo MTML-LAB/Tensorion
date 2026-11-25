@@ -1,6 +1,8 @@
-from . import optimizers
+"""Tensorion: a drop-in replacement for Muon that also handles tensor layers."""
 
-from .optimizers import Tensorion, TensorionSGD
+from . import orthogonalize, unfolding
+from .optimizer import Tensorion
 
-__all__ = ["optimizers", "Tensorion", "TensorionSGD"]
+__version__ = "0.1.0"
 
+__all__ = ["Tensorion", "orthogonalize", "unfolding", "__version__"]

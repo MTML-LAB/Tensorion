@@ -1,0 +1,28 @@
+_target_: tensorion.Tensorion
+_convert_: all
+
+params: ???
+# Layers whose weight gets the Tensorion update, by module class. Every other parameter
+# uses the fallback. The experiments of the paper use every convolution kernel, including
+# 1x1 convolutions, and no linear layer. Remove this key to route by `min_order` instead.
+tensorion_modules: [Conv1d, Conv2d, Conv3d]
+lr: 1e-4
+weight_decay: 1e-4
+momentum: 0.95
+nesterov: false
+# offline | online | online_polar | online_exact, or per layer by parameter name / fnmatch pattern
+# (unmatched layers use offline), for example:
+#   unfolding:
+#     conv1.weight: [0, 1]
+#     layer4.*.weight: online
+unfolding: offline
+# with an online unfolding: choose the split every this many steps (1: every step, as in the paper)
+online_every: 10
+# newton_schulz | polar_express | cans | svd
+orthogonalizer: newton_schulz
+ns_steps: null  # method default
+adjust_lr_fn: match_rms_adamw
+nuclear: false
+fallback: adamw
+adamw_betas: [0.9, 0.95]
+adamw_eps: 1e-8
