@@ -380,3 +380,75 @@ def test_matmul_dtype(unfolding, dtype):
 def test_rejects_bad_matmul_dtype(dtype):
     with pytest.raises(ValueError, match="matmul_dtype"):
         Tensorion(_net().parameters(), matmul_dtype=dtype)
+
+
+def test_exclude_keeps_named_parameters_on_the_fallback():
+    model = _net()
+    opt = Tensorion(model.named_parameters(), exclude="4.*")
+    _train(model, opt, steps=1)
+    assert opt.routing() == {
+        "0.weight": "tensorion", "0.bias": "adamw",
+        "2.weight": "tensorion", "2.bias": "adamw",
+        "4.weight": "adamw", "4.bias": "adamw",
+    }
+    assert "moment1" in opt.state[model[4].weight]
+
+    # It can be set per group, and survives a checkpoint.
+    opt = Tensorion([dict(params=list(model.named_parameters()), use_muon=None, exclude=["4.weight", "0.*"])])
+    clone = Tensorion(model.named_parameters())
+    clone.load_state_dict(copy.deepcopy(opt.state_dict()))
+    assert clone.routing() == opt.routing()
+    assert clone.routing()["0.weight"] == "adamw" and clone.routing()["2.weight"] == "tensorion"
+
+
+def test_exclude_is_checked():
+    with pytest.raises(ValueError, match="needs the names"):
+        Tensorion(_net().parameters(), exclude="4.*")
+    with pytest.raises(ValueError, match="head.weight"):
+        Tensorion(_net().named_parameters(), exclude=["4.*", "head.weight"])
+    with pytest.raises(ValueError, match="match no parameter that gets the Tensorion update"):
+        Tensorion(_net().named_parameters(), exclude="4.*", unfolding={"4.weight": 0})
+
+
+class _Transformer(nn.Module):
+    def __init__(self, tied):
+        super().__init__()
+        self.embed = nn.Embedding(50, 16)
+        self.pos = nn.Parameter(torch.zeros(1, 12, 16))
+        self.attn = nn.MultiheadAttention(16, 2, batch_first=True)
+        self.norm = nn.LayerNorm(16)
+        self.mlp = nn.Linear(16, 16)
+        self.lm_head = nn.Linear(16, 50, bias=False)
+        if tied:
+            self.lm_head.weight = self.embed.weight
+
+
+@pytest.mark.parametrize("tied", [False, True])
+def test_from_model_keeps_head_and_embeddings_on_the_fallback(tied):
+    model = _Transformer(tied)
+    routing = Tensorion.from_model(model, lr=1e-3).routing()
+    on_tensorion = {name for name, rule in routing.items() if rule == "tensorion"}
+    assert on_tensorion == {"attn.in_proj_weight", "attn.out_proj.weight", "mlp.weight"}
+    assert set(routing) == {name for name, _ in model.named_parameters()}
+
+    # By shape alone, the embedding, the positions and the head would all get the Tensorion update.
+    by_shape = Tensorion(model.named_parameters()).routing()
+    assert by_shape["embed.weight"] == by_shape["pos"] == "tensorion"
+
+
+def test_from_model_head_options():
+    model = _net()  # conv, conv, linear head "4"
+    assert Tensorion.from_model(model).routing()["4.weight"] == "adamw"
+    assert Tensorion.from_model(model, head=None).routing()["4.weight"] == "tensorion"
+    routing = Tensorion.from_model(model, head="0").routing()
+    assert (routing["0.weight"], routing["4.weight"]) == ("adamw", "tensorion")
+    routing = Tensorion.from_model(model, head=None, modules=(nn.Conv2d,), exclude="2.*", unfolding="online").routing()
+    assert [routing[k] for k in ("0.weight", "2.weight", "4.weight")] == ["tensorion", "adamw", "adamw"]
+    with pytest.raises(ValueError, match="classifier"):
+        Tensorion.from_model(model, head="classifier")
+
+    # A model that ends in a convolution has no head to keep apart.
+    body = nn.Sequential(nn.Linear(4, 6), nn.Unflatten(1, (6, 1, 1)), nn.Conv2d(6, 3, 1))
+    assert set(Tensorion.from_model(body).routing().values()) == {"tensorion", "adamw"}
+    assert Tensorion.from_model(body).routing()["0.weight"] == "tensorion"
+    _train(model, Tensorion.from_model(model), steps=2)

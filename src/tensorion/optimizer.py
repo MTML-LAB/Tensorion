@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import math
+from fnmatch import fnmatchcase
 from functools import partial
 from typing import Any, Callable, Iterable, Mapping, Optional, Union
 
@@ -36,6 +37,11 @@ class Tensorion(torch.optim.Optimizer):
     folds it back and takes a step. For a 2-D weight this is exactly Muon.
     All other parameters (biases, norms, and anything you route there) are
     updated by a fallback optimizer, AdamW by default.
+
+    The optimizer only sees tensors, so it cannot tell an output head or an
+    embedding table from any other matrix. Keep such layers on the fallback
+    with ``exclude``, or build the optimizer with :meth:`from_model`, which
+    routes by module type. :meth:`routing` shows the result.
 
     The order of a parameter is the number of its axes larger than 1. Axes of
     size 1 carry no information and are ignored throughout: a ``1 x 1``
@@ -86,6 +92,9 @@ class Tensorion(torch.optim.Optimizer):
         min_order: parameters of at least this order (number of axes larger than 1) get
             the Tensorion update. The default ``2`` covers matrices and tensors. ``3`` keeps
             every matrix, including ``1 x 1`` convolutions, on the fallback optimizer.
+        exclude: parameter names or ``fnmatch`` patterns (a string or a list) that always
+            use the fallback, whatever their order, e.g. ``["fc.*", "*embed*"]`` for a
+            head and embeddings. Needs ``model.named_parameters()``.
         fallback: ``"adamw"`` or ``"sgd"``, the update for all other parameters.
         adamw_betas, adamw_eps: AdamW hyperparameters for the fallback.
         sgd_momentum: SGD momentum for the fallback.
@@ -116,6 +125,7 @@ class Tensorion(torch.optim.Optimizer):
         adjust_lr_fn: Optional[str] = "match_rms_adamw",
         nuclear: bool = False,
         min_order: int = 2,
+        exclude: Union[str, Iterable[str]] = (),
         fallback: str = "adamw",
         adamw_betas: tuple[float, float] = (0.9, 0.95),
         adamw_eps: float = 1e-8,
@@ -136,6 +146,7 @@ class Tensorion(torch.optim.Optimizer):
             adjust_lr_fn=adjust_lr_fn,
             nuclear=nuclear,
             min_order=min_order,
+            exclude=exclude,
             fallback=fallback,
             adamw_betas=tuple(adamw_betas),
             adamw_eps=adamw_eps,
@@ -145,8 +156,80 @@ class Tensorion(torch.optim.Optimizer):
         self._unfoldings: dict[Tensor, Callable[[Tensor], tuple[int, ...]]] = {}
         self._online: dict[Tensor, str] = {}
         self._matched_keys: dict[int, set[str]] = {}
+        self._excluded: set[Tensor] = set()
+        self._matched_exclusions: set[str] = set()
         super().__init__(params, defaults)
         self._check_all_keys_matched()
+
+    @classmethod
+    def from_model(
+        cls,
+        model: torch.nn.Module,
+        modules: tuple[type, ...] = (torch.nn.Linear, torch.nn.modules.conv._ConvNd, torch.nn.MultiheadAttention),
+        head: Union[str, Iterable[str], None] = "auto",
+        **kwargs: Any,
+    ) -> "Tensorion":
+        """Build the optimizer for ``model``, routing by module type instead of by shape.
+
+        The weights of ``modules`` (by default linear layers, convolutions and attention
+        projections) get the Tensorion update. Everything else uses the fallback:
+        embedding tables, positional embeddings and other bare parameters, norms and
+        biases. A weight shared with a module outside ``modules``, such as an output
+        layer tied to an embedding, uses the fallback as well.
+
+        Args:
+            model: the model to optimize.
+            modules: module classes whose weights get the Tensorion update.
+            head: the output layer, which is kept on the fallback. ``"auto"`` takes the
+                last of ``modules`` in ``model.named_modules()`` if it is a linear layer,
+                ``None`` keeps no head apart, and a module name or pattern (or a list)
+                such as ``"lm_head"`` names it explicitly.
+            **kwargs: arguments of the constructor. ``exclude`` adds parameter-name
+                patterns on top of this routing.
+
+        Check the result with :meth:`routing`.
+        """
+        attention = ("in_proj_weight", "q_proj_weight", "k_proj_weight", "v_proj_weight")
+        chosen: dict[int, str] = {}  # id(weight) -> name of the module
+        other: set[int] = set()
+        for name, module in model.named_modules():
+            if isinstance(module, modules):
+                keys = attention if isinstance(module, torch.nn.MultiheadAttention) else ("weight",)
+                for key in keys:
+                    weight = getattr(module, key, None)
+                    if isinstance(weight, Tensor) and cls._is_unfoldable(weight):
+                        chosen[id(weight)] = name
+            else:
+                other.update(id(p) for p in module._parameters.values() if p is not None)
+        if head == "auto":
+            last = next(reversed(chosen.values()), None)
+            patterns = [last] if last is not None and isinstance(model.get_submodule(last), torch.nn.Linear) else []
+        else:
+            patterns = [] if head is None else [head] if isinstance(head, str) else list(head)
+            unmatched = [k for k in patterns if not any(fnmatchcase(name, k) for name in chosen.values())]
+            if unmatched:
+                raise ValueError(f"head {unmatched} matches no module that would get the Tensorion update.")
+        chosen = {i: n for i, n in chosen.items() if i not in other and not any(fnmatchcase(n, k) for k in patterns)}
+        named = [(n, p) for n, p in model.named_parameters() if p.requires_grad]
+        groups = [
+            {"params": [(n, p) for n, p in named if id(p) in chosen], "use_tensorion": True},
+            {"params": [(n, p) for n, p in named if id(p) not in chosen], "use_tensorion": False},
+        ]
+        return cls([g for g in groups if g["params"]], **kwargs)
+
+    def routing(self) -> dict[str, str]:
+        """The update rule of every parameter: ``"tensorion"``, ``"adamw"`` or ``"sgd"``.
+
+        Keys are parameter names if the optimizer was given named parameters, and
+        ``"group.index"`` otherwise.
+        """
+        result = {}
+        for g, group in enumerate(self.param_groups):
+            names = group.get("param_names")
+            for i, p in enumerate(group["params"]):
+                key = names[i] if names is not None else f"{g}.{i}"
+                result[key] = "tensorion" if self._uses_tensorion(p, group) else group["fallback"]
+        return result
 
     def add_param_group(self, param_group: dict[str, Any]) -> None:
         # Accept the group keys of Muon's `MuonWithAuxAdam`.
@@ -172,14 +255,37 @@ class Tensorion(torch.optim.Optimizer):
             raise ValueError(f"online_every must be a positive integer, got {group['online_every']!r}")
         if group["fallback"] not in _FALLBACKS:
             raise ValueError(f"fallback must be one of {_FALLBACKS}, got {group['fallback']!r}")
+        self._resolve_exclusions(group)
         if group["use_tensorion"]:
             for p in group["params"]:
+                if p in self._excluded:
+                    continue
                 if not self._is_unfoldable(p):
                     raise ValueError(
                         f"A parameter of shape {tuple(p.shape)} cannot get the Tensorion update. "
                         "Only parameters with 2 or more axes larger than 1 can."
                     )
         self._resolve_unfoldings(group)
+
+    def _resolve_exclusions(self, group: dict[str, Any]) -> None:
+        """Mark the parameters of ``group`` whose names match its ``exclude`` patterns."""
+        patterns = group.get("exclude", ())
+        patterns = group["exclude"] = (patterns,) if isinstance(patterns, str) else tuple(patterns)
+        if not patterns:
+            return
+        if not all(isinstance(k, str) for k in patterns):
+            raise TypeError(f"exclude must be parameter names or patterns, got {patterns!r}")
+        names = group.get("param_names")
+        if names is None:
+            raise ValueError(
+                "exclude is given by parameter name, so the optimizer needs the names: "
+                "pass model.named_parameters() (or named parameters in each group)."
+            )
+        for name, p in zip(names, group["params"]):
+            keys = [k for k in patterns if fnmatchcase(name, k)]
+            if keys:
+                self._excluded.add(p)
+                self._matched_exclusions.update(keys)
 
     def _resolve_unfoldings(self, group: dict[str, Any]) -> None:
         """Fix the unfolding of every Tensorion parameter in ``group``, checked against its shape."""
@@ -206,6 +312,9 @@ class Tensorion(torch.optim.Optimizer):
                 raise ValueError(f"Parameter {name!r} of shape {tuple(p.shape)}: {e}") from None
 
     def _check_all_keys_matched(self) -> None:
+        unmatched = sorted({k for g in self.param_groups for k in g["exclude"]} - self._matched_exclusions)
+        if unmatched:
+            raise ValueError(f"exclude patterns {unmatched} match no parameter (check model.named_parameters()).")
         for group in self.param_groups:
             spec = group["unfolding"]
             if isinstance(spec, Mapping):
@@ -213,7 +322,7 @@ class Tensorion(torch.optim.Optimizer):
                 if unmatched:
                     raise ValueError(
                         f"unfolding keys {unmatched} match no parameter that gets the Tensorion update "
-                        "(check the names in model.named_parameters() and min_order)."
+                        "(check the names in model.named_parameters(), min_order and exclude)."
                     )
 
     def load_state_dict(self, state_dict: dict[str, Any]) -> None:
@@ -221,7 +330,9 @@ class Tensorion(torch.optim.Optimizer):
         self._unfoldings.clear()
         self._online.clear()
         self._matched_keys.clear()
+        self._excluded.clear()
         for group in self.param_groups:
+            self._resolve_exclusions(group)
             self._resolve_unfoldings(group)
 
     @staticmethod
@@ -233,11 +344,12 @@ class Tensorion(torch.optim.Optimizer):
     def _is_unfoldable(cls, p: Tensor) -> bool:
         return cls._order(p) >= 2
 
-    @classmethod
-    def _uses_tensorion(cls, p: Tensor, group: dict[str, Any]) -> bool:
+    def _uses_tensorion(self, p: Tensor, group: dict[str, Any]) -> bool:
+        if p in self._excluded:
+            return False
         flag = group["use_tensorion"]
         if flag is None:
-            return cls._order(p) >= max(2, group["min_order"])
+            return self._order(p) >= max(2, group["min_order"])
         return bool(flag)
 
     @torch.no_grad()

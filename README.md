@@ -24,7 +24,7 @@ Requires Python ≥ 3.12. The only dependencies are PyTorch (≥ 2.15) and NumPy
 
 | You have | Replace it with |
 |---|---|
-| `torch.optim.Muon(matrix_params, ...)` + `torch.optim.AdamW(other_params, ...)` | `Tensorion(model.parameters(), ...)` |
+| `torch.optim.Muon(matrix_params, ...)` + `torch.optim.AdamW(other_params, ...)` | `Tensorion(model.parameters(), ...)`, or `Tensorion.from_model(model, ...)` to keep the head and embeddings on AdamW |
 | `MuonWithAuxAdam(param_groups)` with `use_muon` groups | `Tensorion(param_groups)`. The same groups work, including `betas` and `eps`. |
 
 For a 2-D weight the update is exactly Muon's. A tensor of shape `(n_0, ..., n_{d-1})` is first unfolded into a matrix. It is orthogonalized like a Muon matrix and then folded back.
@@ -34,6 +34,33 @@ The defaults follow Algorithm 1 of the paper: the offline unfolding, Newton–Sc
 ```python
 Tensorion(params, nesterov=True, adjust_lr_fn="original")
 ```
+
+## Heads, embeddings and other special layers
+
+`Tensorion(model.parameters())` routes by shape alone: every parameter with at least two axes larger than 1 gets the Tensorion update. The optimizer cannot tell an output head, an embedding table or a positional embedding from any other matrix, and such layers are usually trained with AdamW in Muon setups. There are two ways to keep them there.
+
+`Tensorion.from_model` routes by module type instead of by shape:
+
+```python
+optimizer = Tensorion.from_model(model, lr=1e-3)
+```
+
+The weights of linear layers, convolutions and attention projections get the Tensorion update. Embedding tables, bare parameters such as positional embeddings and class tokens, norms and biases use the fallback, and so does the output head. The head is taken to be the last linear layer of the model. Name it with `head="lm_head"` if this guess is wrong, or pass `head=None` to train it with Tensorion as well. The `modules` argument changes the module classes, e.g. `modules=(torch.nn.Conv2d,)` for the routing of the paper.
+
+With `exclude`, the routing stays by shape and the listed names or `fnmatch` patterns go to the fallback:
+
+```python
+optimizer = Tensorion(model.named_parameters(), exclude=["fc.*", "*embed*"])
+```
+
+In both cases `optimizer.routing()` returns the update rule of every parameter, so the result can be checked before training:
+
+```python
+>>> optimizer.routing()
+{'conv1.weight': 'tensorion', 'bn1.weight': 'adamw', ..., 'fc.weight': 'adamw', 'fc.bias': 'adamw'}
+```
+
+Parameter groups with `use_muon=True/False` remain the fully manual option.
 
 ## Choosing the unfolding
 
@@ -122,11 +149,12 @@ The CANS defaults are the Muon setting of the CANS paper (7 steps, lower singula
 | `adjust_lr_fn` | `"match_rms_adamw"` | learning rate scaling for an unfolded `rows × cols` update: `"match_rms_adamw"` multiplies by `0.2·√max(rows, cols)` so AdamW learning rates carry over, `"original"` by `√max(1, rows/cols)`, `None` applies no scaling |
 | `nuclear` | `False` | multiply the update by the nuclear norm of the unfolded momentum |
 | `min_order` | `2` | parameters of at least this order get the Tensorion update. The order is the number of axes larger than 1. `3` keeps every matrix, including 1×1 convolutions, on the fallback. |
+| `exclude` | `()` | parameter names or patterns that always use the fallback, see [Heads, embeddings and other special layers](#heads-embeddings-and-other-special-layers) |
 | `fallback` | `"adamw"` | update for the other parameters: `"adamw"` or `"sgd"` |
 | `adamw_betas`, `adamw_eps` | `(0.9, 0.95)`, `1e-8` | AdamW fallback hyperparameters |
 | `sgd_momentum` | `0.95` | SGD fallback momentum |
 
-Every argument can be overridden per parameter group. A group can also set `use_muon=True/False` to force the update rule regardless of `min_order`.
+Every argument can be overridden per parameter group. A group can also set `use_muon=True/False` to force the update rule regardless of `min_order`. `exclude` takes precedence over both.
 
 ## Example
 
