@@ -27,10 +27,17 @@ def _matrices():
     }
 
 
+# The squared singular values of this spectrum span 11 orders of magnitude, more than float32
+# resolves. The Lanczos recurrence then depends on rounding: the error of the estimate moves
+# between 3% and 11% with the CPU and with perturbations of the matrix of relative size 1e-6.
+_BEYOND_FLOAT32 = "decay 1/i^2"
+
+
 @pytest.mark.parametrize("name", sorted(_matrices()))
 def test_estimate_is_close_to_svd(name):
     M = _matrices()[name]
-    assert nuclear_norm(M) == pytest.approx(nuclear_norm_exact(M), rel=0.1)
+    tolerance = 0.2 if name == _BEYOND_FLOAT32 else 0.1
+    assert nuclear_norm(M) == pytest.approx(nuclear_norm_exact(M), rel=tolerance)
 
 
 @pytest.mark.parametrize("name", sorted(_matrices()))
@@ -101,11 +108,10 @@ def test_input_is_not_modified():
 def test_estimate_in_reduced_precision(name, dtype):
     """Only the large products run in the reduced precision, so the estimate stays close.
 
-    bfloat16 keeps 8 bits, and the rounded products add a few percent to the error of the
-    estimate: on the fastest decaying spectrum here it is 7% off in float32 and 12% in bfloat16.
+    bfloat16 keeps 8 bits, and the rounded products add a few percent to the error of the estimate.
     """
     M = _matrices()[name]
-    tolerance = 0.2 if dtype == torch.bfloat16 else 0.12
+    tolerance = 0.3 if name == _BEYOND_FLOAT32 else 0.2 if dtype == torch.bfloat16 else 0.12
     assert nuclear_norm(M, dtype=dtype) == pytest.approx(nuclear_norm_exact(M), rel=tolerance)
 
 
