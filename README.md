@@ -164,6 +164,37 @@ python examples/quickstart.py
 
 trains a small CNN on random data on the CPU in a few seconds.
 
+## JAX (experimental)
+
+The same optimizer is available for JAX as [optax](https://github.com/google-deepmind/optax) gradient transformations:
+
+```bash
+pip install "tensorion[jax] @ git+https://github.com/MTML-LAB/Tensorion.git"
+```
+
+```python
+import optax, tensorion_jax
+
+optimizer = tensorion_jax.tensorion(learning_rate=1e-3)
+state = optimizer.init(params)
+updates, state = optimizer.update(grads, state, params)
+params = optax.apply_updates(params, updates)
+```
+
+`tensorion_jax.tensorion` takes the same arguments with the same defaults as the PyTorch `Tensorion`, and `learning_rate` can be an optax schedule. The differences:
+
+- Per-layer unfoldings are keyed by the path of a parameter in the pytree, joined by `/`: `unfolding={"conv1/kernel": (0, 1)}`.
+- The AdamW betas are `adamw_b1` and `adamw_b2`, and `param_labels` replaces `use_muon` groups.
+- `tensorion_jax.scale_by_tensorion` is the bare transformation, to combine with other optax pieces.
+
+Everything works under `jax.jit`, including the online unfolding. The tests check that it produces the same weights as the PyTorch optimizer, step for step. See [`examples/quickstart_jax.py`](examples/quickstart_jax.py).
+
+The stock `optax.contrib.muon` can already use the offline unfolding, without the rest of this package:
+
+```python
+optax.contrib.muon(1e-3, muon_weight_dimension_numbers=tensorion_jax.offline_dimension_numbers)
+```
+
 ## Reproducing the paper
 
 The training pipeline (Hydra configs, ResNet/ViT models, CIFAR, Food-101 and ImageNet loaders) lives in [`experiments/`](experiments/). The experiments of the paper apply Tensorion to every convolution kernel and train all other parameters with the fallback. This includes 1×1 convolutions, which are matrices and therefore receive plain Muon updates. The experiment config states this routing explicitly, by module type. The release that accompanies the NeurIPS 2026 paper is tagged `neurips-2026`.
@@ -191,3 +222,5 @@ The training pipeline (Hydra configs, ResNet/ViT models, CIFAR, Food-101 and Ima
 pip install -e ".[test]"
 pytest
 ```
+
+The JAX tests are skipped unless `jax` and `optax` are installed (`pip install -e ".[test,jax]"`).

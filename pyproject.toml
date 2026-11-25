@@ -29,16 +29,17 @@ classifiers = [
 
 [project.optional-dependencies]
 test = ["pytest>=9.2"]
+jax = ["jax>=0.12.1", "optax>=0.2.9"]
 
 [project.urls]
 Repository = "https://github.com/MTML-LAB/Tensorion"
 Paper = "https://arxiv.org/abs/2606.25975"
 
 [tool.hatch.build.targets.wheel]
-packages = ["src/tensorion"]
+packages = ["src/tensorion", "src/tensorion_jax"]
 
 [tool.hatch.build.targets.sdist]
-include = ["src/tensorion", "tests", "examples", "README.md", "LICENSE"]
+include = ["src/tensorion", "src/tensorion_jax", "tests", "examples", "README.md", "LICENSE"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

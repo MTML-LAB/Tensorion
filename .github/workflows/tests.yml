@@ -26,6 +26,22 @@ jobs:
       - name: Quickstart
         run: python examples/quickstart.py
 
+  jax:
+    name: jax (parity with PyTorch)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: astral-sh/setup-uv@v10.4.0
+        with:
+          python-version: "3.13"
+          activate-environment: true
+      - name: Install
+        run: uv pip install ".[test,jax]" --extra-index-url https://download.pytorch.org/whl/cpu --index-strategy unsafe-best-match
+      - name: Test
+        run: pytest -q tests/test_jax.py
+      - name: Quickstart
+        run: python examples/quickstart_jax.py
+
   experiments:
     runs-on: ubuntu-latest
     steps:
